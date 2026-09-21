@@ -40,6 +40,8 @@ ls "$BK"/*/.codex/AGENTS.md >/dev/null 2>&1 || fail "installer did not back up C
 [ -z "$(find "$CLAUDE_A" "$CODEX_A" -name '*backup*' 2>/dev/null)" ] || fail "installer left backups inside ~/.claude or ~/.codex"
 dupes="$(find -L "$CLAUDE_A/skills" -name SKILL.md -exec grep -l '^name: orchestrate$' {} + 2>/dev/null | wc -l | tr -d ' ')"
 [ "$dupes" -eq 1 ] || fail "found $dupes skills named orchestrate in ~/.claude/skills (expected 1)"
+[ -L "$HOME_A/orchestra-skills" ] && [ "$(cd "$HOME_A/orchestra-skills" && pwd -P)" = "$(cd "$ROOT" && pwd -P)" ] || fail "installer did not link ~/orchestra-skills to a checkout that lives elsewhere"
+[ -L "$HOME_A/.local/bin/orchestra" ] || fail "installer did not put the orchestra command in ~/.local/bin"
 [ "$(grep -c '<!-- orchestra-skills:start -->' "$CLAUDE_A/CLAUDE.md")" -eq 1 ] || fail "CLAUDE.md marker duplicated"
 [ "$(grep -c '<!-- orchestra-skills:start -->' "$CODEX_A/AGENTS.md")" -eq 1 ] || fail "Codex marker duplicated"
 before="$(find "$BK" -type f | wc -l | tr -d ' ')"
@@ -49,7 +51,7 @@ after="$(find "$BK" -type f | wc -l | tr -d ' ')"
 pass "installer backs up conflicts outside skill folders and is idempotent"
 
 printf '%s\n' "Doctor"
-for s in delegate-setup codex-delegate agy-delegate claude-delegate copilot-delegate; do mkdir -p "$CLAUDE_A/skills/$s/scripts"; : > "$CLAUDE_A/skills/$s/SKILL.md"; : > "$CLAUDE_A/skills/$s/scripts/relay.mjs"; done
+for s in delegate-setup codex-delegate agy-delegate claude-delegate copilot-delegate; do mkdir -p "$CLAUDE_A/skills/$s/scripts"; : > "$CLAUDE_A/skills/$s/SKILL.md"; printf '%s\n' 'case "--read-only": case "--effort":' > "$CLAUDE_A/skills/$s/scripts/relay.mjs"; done
 mkdir -p "$CLAUDE_A/skills/delegate-setup/scripts" "$TMP/bin"
 cat > "$CLAUDE_A/skills/delegate-setup/scripts/discover.mjs" <<'JS'
 process.stdout.write(JSON.stringify({discovered:[
@@ -124,24 +126,53 @@ pass "task/delta/review cards pass; leaks, missing guard and incomplete deltas f
 
 printf '%s\n' "Orchestra policy engine (fake tools, no model calls)"
 OH="$TMP/orch-home"; mkdir -p "$OH/.claude/skills/delegate-setup/scripts"
-for t in codex claude agy; do mkdir -p "$OH/.claude/skills/$t-delegate/scripts"; : > "$OH/.claude/skills/$t-delegate/scripts/relay.mjs"; done
+# Fake relays declare the flags they accept, like the real ones do (each relay parses its own argv).
+for t in codex claude agy opencode copilot; do mkdir -p "$OH/.claude/skills/$t-delegate/scripts"; printf '%s\n' 'case "--read-only": case "--effort": case "--variant":' > "$OH/.claude/skills/$t-delegate/scripts/relay.mjs"; done
+mkdir -p "$OH/.claude/skills/kimi-delegate/scripts"; printf '%s\n' 'case "--model":' > "$OH/.claude/skills/kimi-delegate/scripts/relay.mjs"   # Kimi: no --read-only
 cat > "$OH/.claude/skills/delegate-setup/scripts/discover.mjs" <<'JS'
+if (process.env.FAKE_DISCOVER_FAIL) process.exit(1);
 process.stdout.write(JSON.stringify({discovered:[
   {key:"codex",authenticated:true,models:{status:"reported",values:["gpt-6-astra","gpt-5.6-luna"]}},
   {key:"claude",authenticated:true,models:{status:"aliases",values:["fable","opus","sonnet","haiku"]}},
-  {key:"agy",authenticated:true,models:{status:"reported",values:["gemini-3.8-flash-high\tGemini"]}}
+  {key:"agy",authenticated:true,models:{status:"reported",values:["gemini-3.8-flash-high\tGemini"]}},
+  {key:"kimi",authenticated:true,models:{status:"unsupported",values:[]}},
+  {key:"copilot",authenticated:null,models:{status:"unsupported",values:[]}}
 ]}));
 JS
 ORC() { HOME="$OH" XDG_CONFIG_HOME="$OH/.config" XDG_CACHE_HOME="$OH/.cache" "$ROOT/scripts/orchestra" "$@"; }
 pick() { ORC resolve "$@" --json | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0)).model))'; }
+ORC check >/dev/null || fail "orchestra check rejected the default policy"
 [ "$(pick backend)" = codex ] || fail "backend should resolve to codex when it's available"
-[ "$(pick tests)" = luna ] || fail "tests should skip kimi/deepseek (not installed) and use luna"
+[ "$(pick tests)" = kimi ] || fail "tests should resolve to kimi when its CLI is installed"
+[ "$(pick docs)" = luna ] || fail "docs should skip deepseek (opencode CLI not installed) and use luna, never haiku as a builder"
 ORC exhausted codex --for 60m >/dev/null
-[ "$(pick backend)" = sonnet ] || fail "backend should fall back to sonnet while codex is exhausted"
+[ "$(pick backend)" = kimi ] || fail "backend should fall back to kimi while codex is exhausted"
+[ "$(pick debug)" = sonnet ] || fail "debug should fall back to sonnet while codex is exhausted"
 ORC available codex >/dev/null
-[ "$(pick review --not-model luna)" = haiku ] || fail "review must skip the builder's model"
+[ "$(pick review --not-model luna)" = copilot ] || fail "review must skip the builder's model and use the next read-only reviewer (copilot)"
 ORC resolve review --json | grep -q '"--read-only"' || fail "review must resolve read-only"
-[ "$(pick security-review --cheap-only)" = sonnet ] || fail "--cheap-only must skip expensive models"
+ORC resolve tests --json | grep -q '"--effort"' && fail "kimi's relay has no --effort; the engine must not pass it"
+ORC exhausted copilot --for 60m >/dev/null
+[ "$(pick review --not-model luna)" = haiku ] || fail "review must fall back past an exhausted copilot"
+ORC available copilot >/dev/null
+[ "$(pick security-review --cheap-only)" = copilot ] || fail "--cheap-only must skip expensive models"
+# A read-only role never lands on a relay that can't enforce read-only (Kimi's has no --read-only).
+ORC set planner-light kimi sonnet --read-only >/dev/null
+[ "$(pick planner-light)" = sonnet ] || fail "a read-only role must skip a relay without --read-only"
+ORC resolve planner-light 2>&1 | grep -q "no --read-only" || fail "the skip reason must say the relay has no --read-only"
+if ORC check >/dev/null 2>&1; then fail "orchestra check accepted a read-only role that lists a relay without --read-only"; fi
+ORC undo >/dev/null
+ORC set docs copilot sonnet >/dev/null
+if ORC check >/dev/null 2>&1; then fail "orchestra check accepted a writing role that uses the read-only-only copilot"; fi
+ORC undo >/dev/null; ORC check >/dev/null || fail "orchestra undo did not restore a valid policy"
+# A failed discovery must not be cached, and must not make every role unavailable.
+rm -rf "$OH/.cache"
+FAKE_DISCOVER_FAIL=1 ORC roles | grep -q "^Discovery:" || fail "a failed discovery must be reported"
+[ ! -f "$OH/.cache/orchestra-skills/discover.json" ] || fail "a failed discovery was cached"
+ORC roles >/dev/null; [ -f "$OH/.cache/orchestra-skills/discover.json" ] || fail "a good discovery was not cached"
+[ "$(FAKE_DISCOVER_FAIL=1 pick backend)" = codex ] || fail "a failed refresh must keep using the last good discovery"
+node -e 'const fs=require("fs");const f=process.argv[1];fs.writeFileSync(f,JSON.stringify({at:Date.now(),data:{discovered:[]}}))' "$OH/.cache/orchestra-skills/discover.json"
+[ "$(pick backend)" = codex ] || fail "an empty cached discovery must be ignored and re-probed"
 [ "$(ORC route simple planning)" = none ] || fail "route alias simple → tiny"
 [ "$(ORC route small planner)" = planner-light ] || fail "small must use planner-light"
 R="selftest-$$"; ORC budget start "$R" >/dev/null
@@ -150,7 +181,8 @@ ORC budget spend "$R" architecture astra >/dev/null || fail "budget refused the 
 ORC budget spend "$R" final-audit opus >/dev/null || fail "budget refused the final audit"
 ORC budget spend "$R" backend sonnet >/dev/null || fail "budget must allow cheap calls"
 if ORC budget spend "$R" security-review astra >/dev/null 2>&1; then fail "budget allowed a 4th expensive call"; fi
-pass "roles resolve by availability/quota; builder≠reviewer; cheap-only; routing; budget refuses the 4th expensive call"
+ORC metrics "$R" >/dev/null || fail "metrics failed for a run started without --dir"
+pass "roles resolve by availability/quota/relay flags; builder≠reviewer; cheap-only; check; discovery never poisons; routing; budget refuses the 4th expensive call"
 
 printf '%s\n' "Token report discovery"
 RUNROOT="/tmp/orchestrate/orchestra-selftest-$$/T1/run"; mkdir -p "$RUNROOT"

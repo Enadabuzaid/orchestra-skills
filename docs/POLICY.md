@@ -38,25 +38,50 @@ orchestra set review kimi deepseek haiku --read-only
 orchestra undo                                    # previous policy
 ```
 
-Default roles: **Planner ≠ Builder ≠ Reviewer**.
+Default roles: **thinking on strong models, typing on the cheapest available one**, and
+Planner ≠ Builder ≠ Reviewer.
 
 | | Role | Chain |
 |---|---|---|
-| **Planning** | planner | Fable → Astra → Opus |
-| | planner-hard | Opus → Fable → Astra |
+| **Planning** | planner-light (small) | Sonnet → Luna → Copilot → Haiku |
+| | planner (feature) | Fable → Astra → Opus |
+| | planner-hard (complex, Hard) | Opus → Fable → Astra |
 | | architecture (second opinion) | Astra → Opus, always a different family from the planner |
-| **Building** | backend | Codex → Kimi → DeepSeek → Sonnet |
-| | frontend | Antigravity → Codex → Kimi → Sonnet |
-| | tests | Kimi → DeepSeek → Luna → Sonnet |
-| | refactor | Kimi → Codex → Sonnet |
-| | small, docs | DeepSeek → … → Sonnet |
-| **Review** | review | Kimi → DeepSeek → Luna → Haiku → Sonnet, never the builder's model |
-| | ui-review | Codex (read-only) → Luna → Sonnet |
-| | security-review | Astra → Sonnet |
+| **Building** | backend | Codex → Kimi → DeepSeek → Luna → OpenCode free → Sonnet |
+| | frontend | Antigravity → Codex → Kimi → Luna → OpenCode free → Sonnet |
+| | tests | Kimi → DeepSeek → Luna → Antigravity → OpenCode free → Sonnet |
+| | refactor | Kimi → Codex → Luna → OpenCode free → Sonnet |
+| | debug | Codex → Luna → OpenCode free → Sonnet |
+| | docs, small | DeepSeek → … → OpenCode free → Sonnet |
+| **Review** (read-only) | review | DeepSeek → Luna → OpenCode free → Copilot → Haiku → Sonnet, never the builder's model |
+| | ui-review | Codex → Luna → Copilot → Sonnet |
+| | security-review | Astra → Copilot → Sonnet |
 | **Final** | final-audit | Opus |
 
+Why the chains look like this (all from recorded runs, see [TESTING.md](TESTING.md)):
+
+- **Other subscriptions first, Sonnet last.** Codex and Luna run on ChatGPT, Antigravity on Google,
+  Kimi and DeepSeek on their own plans, and `opencode-free` (OpenCode Zen's free tier,
+  `opencode/big-pickle`) costs nothing. Sonnet is the reliable last stop, on your Claude plan.
+- **Haiku never builds.** As the `docs` builder it looped for 21 turns and 650k tokens on a README
+  (v0.5 end-to-end run). It stays in read-only chains only.
+- **Copilot only reviews.** Headless Copilot can write only with `--allow-all-tools` (full access),
+  so its model is marked `read_only_tool` and `orchestra check` refuses it in a writing role.
+- **Kimi builds but never reviews.** Its relay has no `--read-only`, so the engine skips it for
+  read-only roles (planners, reviews, audit), and says so.
+
 Models are named in the `models` section (`astra` = Codex + gpt-6-astra, high effort, expensive).
-Add one with `orchestra model <name> tool=<tool> model=<id> effort=<level> [expensive]`.
+Add one with `orchestra model <name> tool=<tool> model=<id> effort=<level> [expensive]`, then run
+`orchestra check`: it verifies every chain names a known model, read-only roles use only relays
+that can enforce read-only, and writing roles never use a read-only-only tool.
+
+### Availability
+
+`orchestra roles` asks delegate-setup's discovery which CLIs are installed, logged in, and which
+models they offer, and caches the answer for 15 minutes. A failed or empty probe is **never** cached:
+the engine keeps the last good result, and without one falls back to a PATH check, so a hiccup can't
+make every role `NONE AVAILABLE` (that happened once, for 15 minutes, in the v0.5 end-to-end run).
+`orchestra roles --refresh` re-probes; `doctor.sh` always does.
 
 ### Quota
 

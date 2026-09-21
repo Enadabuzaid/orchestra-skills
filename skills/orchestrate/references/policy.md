@@ -30,24 +30,30 @@ set automatically when a relay fails with a quota error).
 | `different_from_builder` | a review must not use the model that built the task (`--not-model`) |
 | `different_family_from_planner` | the second opinion must come from another model family (`--not-family`) |
 
-Default roles (Planner ≠ Builder ≠ Reviewer):
+Default roles (thinking on strong models, typing on the cheapest available one; Planner ≠ Builder ≠
+Reviewer). `opencode-free` is OpenCode Zen's free tier: $0, the last stop before Sonnet.
 
 | Group | Role | Chain |
 |---|---|---|
-| Planning | `planner-light` | sonnet → luna → haiku |
+| Planning | `planner-light` | sonnet → luna → copilot → haiku |
 | | `planner` | **fable** → astra → opus |
 | | `planner-hard` | **opus** → fable → astra |
 | | `architecture` (second opinion) | **astra** → opus (a different family from the planner) |
-| Building | `backend` | **codex** → kimi → deepseek → sonnet |
-| | `frontend` | **antigravity** → codex → kimi → sonnet |
-| | `tests` | **kimi** → deepseek → luna → sonnet |
-| | `refactor` | **kimi** → codex → sonnet |
-| | `debug` | codex → sonnet |
-| | `docs`, `small` | **deepseek** → … → sonnet |
-| Review | `review` (backend/code diffs) | **kimi** → deepseek → luna → haiku → sonnet |
-| | `ui-review` | **codex** (read-only) → luna → sonnet |
-| | `security-review` | **astra** → sonnet |
+| Building | `backend` | **codex** → kimi → deepseek → luna → opencode-free → sonnet |
+| | `frontend` | **antigravity** → codex → kimi → luna → opencode-free → sonnet |
+| | `tests` | **kimi** → deepseek → luna → antigravity → opencode-free → sonnet |
+| | `refactor` | **kimi** → codex → luna → opencode-free → sonnet |
+| | `debug` | codex → luna → opencode-free → sonnet |
+| | `docs`, `small` | **deepseek** → … → opencode-free → sonnet |
+| Review (read-only) | `review` (every task) | **deepseek** → luna → opencode-free → copilot → haiku → sonnet |
+| | `ui-review` | **codex** → luna → copilot → sonnet |
+| | `security-review` | **astra** → copilot → sonnet |
 | Final | `final-audit` | **opus** |
+
+Rules the engine enforces (`orchestra check`, and at resolve time): Haiku never builds; Copilot only
+reviews (`read_only_tool`: headless writes need `--allow-all-tools`); a read-only role never lands on
+a relay without `--read-only` (Kimi's), and flags a relay doesn't accept (`--effort` for Kimi) are
+not passed. A failed CLI discovery is never cached: the last good result, then a PATH check, is used.
 
 Older names still resolve: `code-review` → review, `architecture-review`/`plan-check` →
 architecture, `ui` → frontend, `ui-check` → ui-review, `done-gate` → final-audit.

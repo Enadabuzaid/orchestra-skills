@@ -116,8 +116,8 @@ You don't need all of them. Missing CLIs just mean you move their lane to one yo
 
 ```bash
 npx skills add amElnagdy/delegate-skills --global --agent claude-code -y \
-  --skill codex-delegate --skill agy-delegate --skill claude-delegate \
-  --skill copilot-delegate --skill delegate-setup
+  --skill delegate-setup --skill claude-delegate --skill codex-delegate --skill agy-delegate \
+  --skill copilot-delegate --skill kimi-delegate --skill opencode-delegate
 ```
 
 **Step 3. Install orchestra-skills.**
@@ -127,7 +127,7 @@ git clone https://github.com/Enadabuzaid/orchestra-skills ~/orchestra-skills
 ~/orchestra-skills/install.sh
 ```
 
-`install.sh` links the skill and the four agents into `~/.claude`, adds the rules block to
+`install.sh` links the skill and the five agents into `~/.claude` (and `~/orchestra-skills` plus `~/.local/bin/orchestra` if the clone lives elsewhere), adds the rules block to
 `~/.claude/CLAUDE.md`, and writes the default lanes if you don't have any yet. It is safe to run again.
 
 **Step 4. Let Antigravity write in your project folders** (only if you use the `ui` lane).

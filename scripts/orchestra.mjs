@@ -25,23 +25,42 @@ const writeJSON = (f, v) => { fs.mkdirSync(path.dirname(f), { recursive: true })
 const policyPath = () => (fs.existsSync(USER_POLICY) ? USER_POLICY : DEFAULT_POLICY);
 const loadPolicy = () => { const p = readJSON(policyPath(), null); if (!p || !p.roles || !p.models) die(`invalid policy: ${policyPath()}`); return p; };
 const savePolicy = (p) => {
-  if (fs.existsSync(USER_POLICY)) { const b = path.join(CFG_DIR, "backups"); fs.mkdirSync(b, { recursive: true }); fs.copyFileSync(USER_POLICY, path.join(b, `orchestra.${Date.now()}.json`)); }
+  // Back up whatever is in effect now (the default file on a fresh machine), so `undo` always works.
+  const b = path.join(CFG_DIR, "backups"); fs.mkdirSync(b, { recursive: true }); fs.copyFileSync(policyPath(), path.join(b, `orchestra.${Date.now()}.json`));
   writeJSON(USER_POLICY, p);
 };
 const roleName = (r) => ROLE_ALIASES[r] || r;
 
 // ---------- availability ----------
+// Discovery (which CLIs are installed, logged in, and which models they offer) comes from
+// delegate-setup's discover.mjs. It probes every CLI, so it can be slow or fail (a CLI hangs, the
+// network is down). A failed probe is never cached: we keep the last good result, and without one we
+// fall back to a plain PATH check, so a hiccup can't make every role "NONE AVAILABLE" for 15 minutes.
+const DISCOVER_TTL = 15 * 60 * 1000;
+const DISCOVER_TIMEOUT = Number(process.env.ORCHESTRA_DISCOVER_TIMEOUT_MS) || 120000;
+function onPath(bin) { try { execFileSync(process.platform === "win32" ? "where" : "which", [bin], { stdio: "ignore" }); return true; } catch { return false; } }
 function discover(refresh) {
   const f = path.join(CACHE_DIR, "discover.json");
   const c = readJSON(f, null);
-  if (!refresh && c && Date.now() - c.at < 15 * 60 * 1000) return c.data;
+  const fresh = c && Array.isArray(c.data?.discovered) && c.data.discovered.length > 0;
+  if (!refresh && fresh && Date.now() - c.at < DISCOVER_TTL) return c.data;
   const script = SKILL_DIRS.map((d) => path.join(d, "delegate-setup", "scripts", "discover.mjs")).find((p) => fs.existsSync(p));
-  let data = { discovered: [] };
-  if (script) { try { data = JSON.parse(execFileSync("node", [script], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 120000 })); } catch {} }
-  writeJSON(f, { at: Date.now(), data });
-  return data;
+  let data = null, why = script ? "" : "delegate-setup skill not installed";
+  if (script) {
+    try {
+      const out = JSON.parse(execFileSync("node", [script], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: DISCOVER_TIMEOUT }));
+      if (Array.isArray(out.discovered) && out.discovered.length) data = out; else why = "discovery found no CLIs";
+    } catch (e) { why = e.killed || e.signal ? `discovery timed out after ${DISCOVER_TIMEOUT / 1000}s` : `discovery failed (${(e.message || "").split("\n")[0]})`; }
+  }
+  if (data) { writeJSON(f, { at: Date.now(), data }); return data; }
+  if (fresh) return { ...c.data, stale: why };          // last good result, even if old
+  // No data at all: the binary on PATH counts as installed (login and models unknown).
+  const tools = new Set(Object.values(loadPolicy().models).map((m) => m.tool));
+  return { discovered: [...tools].filter(onPath).map((key) => ({ key, authenticated: null, models: { status: "unknown" } })), fallback: why };
 }
 const relayFor = (tool) => SKILL_DIRS.map((d) => path.join(d, `${tool}-delegate`, "scripts", "relay.mjs")).find((p) => fs.existsSync(p));
+// Which flags a relay accepts (each relay parses its own argv; an unknown flag is a hard failure).
+const relaySupports = (tool, flag) => { const f = relayFor(tool); if (!f) return false; try { return fs.readFileSync(f, "utf8").includes(`"${flag}"`); } catch { return false; } };
 function exhaustedUntil(tool) {
   const s = readJSON(STATE, { exhausted: {} }); const u = s.exhausted?.[tool];
   return u && new Date(u) > new Date() ? u : null;
@@ -51,7 +70,7 @@ function availability(name, p, disc) {
   if (!m) return `unknown model "${name}" (add it under "models")`;
   if (!relayFor(m.tool)) return `${m.tool}-delegate skill not installed`;
   const d = disc.discovered?.find((e) => e.key === m.tool);
-  if (!d) return `${m.tool} CLI not installed`;
+  if (!d) return `${m.tool} CLI not installed${disc.fallback ? ` (${disc.fallback}; checked PATH only)` : ""}`;
   if (d.authenticated === false) return `${m.tool} not logged in`;
   if (m.model && d.models?.status === "reported") {
     const ids = (d.models.values || []).map((v) => String(v).split("\t")[0]);
@@ -71,9 +90,11 @@ function resolve(role, { notFamily, notModel, cheapOnly, refresh } = {}) {
     if (cheapOnly && m && m.expensive) { skipped.push(`${name}: expensive, and the budget is used`); continue; }
     const why = availability(name, p, disc);
     if (why) { skipped.push(`${name}: ${why}`); continue; }
+    // A read-only role (planner, review, audit) may only use a relay that can enforce read-only.
+    if (r.read_only && !relaySupports(m.tool, "--read-only")) { skipped.push(`${name}: ${m.tool} relay has no --read-only, and this role must not write`); continue; }
     const flags = [];
     if (m.model) flags.push("--model", m.model);
-    if (m.effort) flags.push(m.tool === "opencode" ? "--variant" : "--effort", m.effort);
+    if (m.effort) { const ef = m.tool === "opencode" ? "--variant" : "--effort"; if (relaySupports(m.tool, ef)) flags.push(ef, m.effort); }
     if (r.read_only) flags.push("--read-only");
     const pre = m.tool === "claude" && !process.env.ORCHESTRA_USE_API_KEY ? "env -u ANTHROPIC_API_KEY " : "";
     return { role: roleName(role), model: name, tool: m.tool, expensive: !!m.expensive, relay: relayFor(m.tool), flags, command: `${pre}node ${relayFor(m.tool)} ${flags.join(" ")}`, skipped };
@@ -104,12 +125,16 @@ const flag = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : u
 switch (cmd) {
   case "roles": {
     const p = loadPolicy(); const disc = discover(args.includes("--refresh"));
-    console.log(`Policy: ${policyPath()}\n`);
-    console.log("ROLE".padEnd(17) + "CHAIN (primary → fallbacks)".padEnd(40) + "USES NOW");
+    console.log(`Policy: ${policyPath()}`);
+    if (disc.stale) console.log(`Discovery: using the last good result (${disc.stale}); run \`orchestra roles --refresh\` to retry`);
+    else if (disc.fallback) console.log(`Discovery: ${disc.fallback}; availability is a PATH check only (login and model lists unknown)`);
+    console.log("");
+    const chains = Object.fromEntries(Object.entries(p.roles).map(([role, r]) => [role, [r.primary, ...(r.fallback || [])].join(" → ")]));
+    const w = Math.max(28, ...Object.values(chains).map((c) => c.length)) + 2;
+    console.log("ROLE".padEnd(17) + "CHAIN (primary → fallbacks)".padEnd(w) + "USES NOW");
     for (const [role, r] of Object.entries(p.roles)) {
-      const chain = [r.primary, ...(r.fallback || [])].join(" → ");
       const res = resolve(role, {}); const now = res.model ? `${res.model}${res.model !== r.primary ? "  (fallback)" : ""}` : "NONE AVAILABLE";
-      console.log(role.padEnd(17) + chain.padEnd(40) + now + (r.read_only ? "  [read-only]" : ""));
+      console.log(role.padEnd(17) + chains[role].padEnd(w) + now + (r.read_only ? "  [read-only]" : ""));
     }
     const s = readJSON(STATE, { exhausted: {} }); const ex = Object.entries(s.exhausted || {}).filter(([, u]) => new Date(u) > new Date());
     if (ex.length) console.log(`\nQuota-exhausted: ${ex.map(([t, u]) => `${t} until ${new Date(u).toLocaleTimeString()}`).join(", ")}`);
@@ -119,7 +144,11 @@ switch (cmd) {
     const role = args[0] || die("usage: orchestra resolve <role> [--not-model <m>] [--not-family <tool>] [--cheap-only] [--json]");
     const r = resolve(role, { notFamily: flag("--not-family"), notModel: flag("--not-model"), cheapOnly: args.includes("--cheap-only"), refresh: args.includes("--refresh") });
     if (args.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(r.model ? 0 : 1); }
-    if (!r.model) { console.error(`no available model for role ${r.role}:\n  ${r.skipped.join("\n  ")}`); process.exit(1); }
+    if (!r.model) {
+      console.error(`no available model for role ${r.role}:\n  ${r.skipped.join("\n  ")}`);
+      if (r.skipped.some((s) => /not installed/.test(s))) console.error(`hint: if a CLI listed as "not installed" is on your PATH, discovery failed: run \`orchestra roles --refresh\``);
+      process.exit(1);
+    }
     console.log(`role=${r.role} model=${r.model} tool=${r.tool}${r.expensive ? " expensive" : ""}`);
     console.log(`command=${r.command}`);
     if (r.skipped.length) console.log(`skipped=${r.skipped.join("; ")}`);
@@ -180,7 +209,15 @@ switch (cmd) {
     console.log(`  all calls by kind: ${Object.entries(byKind).map(([k, v]) => `${k} ${v}`).join(", ")}`);
     const fb = led.calls.filter((c) => c.note && /fallback/.test(c.note)); const rt = led.calls.filter((c) => c.note && /retry/.test(c.note));
     console.log(`  fallbacks: ${fb.length}${fb.length ? ` (${fb.map((c) => c.note).join("; ")})` : ""}   delta retries: ${rt.length}`);
-    const dir = args[1] || led.dir;
+    // Relay runs live in ${TMPDIR}/orchestrate/<repo>/…; the run id starts with the repo name.
+    let dir = args[1] || led.dir;
+    if (!dir || !fs.existsSync(dir)) {
+      for (const base of [...new Set([path.join(os.tmpdir(), "orchestrate"), "/tmp/orchestrate"])]) {
+        if (!fs.existsSync(base)) continue;
+        const hit = fs.readdirSync(base).filter((n) => run.startsWith(n)).sort((a, b) => b.length - a.length)[0];
+        if (hit) { dir = path.join(base, hit); break; }
+      }
+    }
     if (dir && fs.existsSync(dir)) {
       const results = []; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (e.name === "result.json") results.push(f); } };
       walk(dir); let tin = 0, tout = 0, usd = 0; const paid = {};
@@ -194,6 +231,21 @@ switch (cmd) {
       console.log(`  per-run detail: ~/orchestra-skills/scripts/token-report.sh ${dir}/*/run`);
     }
     break;
+  }
+  case "check": {
+    // Policy invariants. Exit 1 on the first class of problem; used by self-test and after `orchestra edit`.
+    const p = loadPolicy(); const problems = [];
+    const known = new Set(Object.keys(p.models));
+    for (const [role, r] of Object.entries(p.roles)) {
+      for (const n of [r.primary, ...(r.fallback || [])]) if (!known.has(n)) problems.push(`role ${role}: unknown model "${n}"`);
+      // Tools that can't write headless without widening permissions may only serve read-only roles.
+      if (!r.read_only) for (const n of [r.primary, ...(r.fallback || [])]) if (p.models[n]?.read_only_tool) problems.push(`role ${role} writes, but model ${n} (${p.models[n].tool}) can only run read-only`);
+      if (r.read_only) for (const n of [r.primary, ...(r.fallback || [])]) { const t = p.models[n]?.tool; if (t && relayFor(t) && !relaySupports(t, "--read-only")) problems.push(`role ${role} is read-only, but the ${t} relay (model ${n}) has no --read-only`); }
+    }
+    for (const kind of ["planner", "planner-hard", "planner-light", "architecture", "review", "ui-review", "security-review", "final-audit"]) if (p.roles[kind] && !p.roles[kind].read_only) problems.push(`role ${kind} must be read_only`);
+    for (const [lv, v] of Object.entries(p.routing || {})) { if (v.planner && !p.roles[v.planner]) problems.push(`routing ${lv}: planner role "${v.planner}" missing`); for (const rv of v.reviews || []) if (!p.roles[rv]) problems.push(`routing ${lv}: review role "${rv}" missing`); }
+    if (problems.length) { console.error(`policy ${policyPath()}:\n  ✗ ${problems.join("\n  ✗ ")}`); process.exit(1); }
+    console.log(`policy OK: ${Object.keys(p.models).length} models, ${Object.keys(p.roles).length} roles, levels ${Object.keys(p.routing || {}).join("/")} (${policyPath()})`); break;
   }
   case "edit": { if (!fs.existsSync(USER_POLICY)) { fs.mkdirSync(CFG_DIR, { recursive: true }); fs.copyFileSync(DEFAULT_POLICY, USER_POLICY); } console.log(USER_POLICY); break; }
   case "undo": {
@@ -212,6 +264,7 @@ orchestra route [level] [field]                 routing policy (tiny, small, fea
 orchestra budget start <run> [--dir <runs-dir>] | spend <run> <role> <model> [--note …] | show <run>
                                                expensive-call budget for one feature (spend exits 3 when refused)
 orchestra metrics <run> [runs-dir]              run metrics: expensive calls, fallbacks, retries, relay tokens
+orchestra check                                 validate the policy (models exist, read-only tools only in read-only roles)
 orchestra edit | undo                           your policy file / restore the previous one`); break;
   default: die(`unknown command ${cmd} (orchestra help)`);
 }

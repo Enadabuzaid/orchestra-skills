@@ -20,6 +20,11 @@ file; each lane's `result.json` is in `<work dir>/<lane>.run/`.
 | *"claude.ai connectors are disabled because ANTHROPIC_API_KEY … is set"* | An API key in your environment takes precedence over your claude.ai login, so usage is billed to the API key | `unset ANTHROPIC_API_KEY` in the shell if you want your subscription to be used |
 | An implementer committed | Should never happen (relays don't commit and briefs forbid it) | `git reset --soft HEAD~1`, review the change, and report it upstream to delegate-skills |
 | `readOnlyViolation` in `result.json` | A read-only run changed files | Inspect with `git status`, discard with `git checkout -- <files>`, and report it upstream |
+| `orchestra roles` shows `NONE AVAILABLE` for every role, or "`<tool> CLI not installed`" for a CLI that is on your PATH | CLI discovery failed or timed out (it probes every CLI) | Fixed in v0.5.1: a failed probe is never cached; the last good result or a PATH check is used. Run `orchestra roles --refresh`; `doctor.sh` prints the reason per model |
+| `orchestra resolve review` skips Kimi with "relay has no --read-only" | Kimi's relay can't enforce read-only, and reviews must not write | Expected. Kimi builds (backend, tests, …); reviews go to the next model in the chain |
+| `orchestra check` says "writes, but model copilot can only run read-only" | You put Copilot in a builder chain | Keep Copilot in read-only roles (`review`, `ui-review`, `security-review`), or accept `--allow-all-tools` by running it by hand |
+| A builder loops for hundreds of thousands of tokens on a small task | A too-small model as builder (recorded: Haiku, 650k tokens on a README) | Haiku is out of every builder chain since v0.5.1. If you added a small model, move it behind Sonnet, or make it read-only |
+| `antigravity … auto-denied the command permission` | Headless Antigravity may run only allowed commands | `scripts/agy-allow.sh <project> --tests "<your test command>"`; the task falls back to the next model meanwhile |
 
 ## Reading a relay result
 

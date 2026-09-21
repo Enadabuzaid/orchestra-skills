@@ -12,7 +12,7 @@ license: MIT
 metadata:
   author: Enad Abuzaid
   homepage: https://github.com/Enadabuzaid/orchestra-skills
-  version: 0.5.0
+  version: 0.5.1
   requires: amElnagdy/delegate-skills relays, a clone of orchestra-skills at ~/orchestra-skills
 ---
 
@@ -32,6 +32,7 @@ in planner roles, not here.
 | `~/orchestra-skills/scripts/orchestra exhausted <tool> [--until HH:MM]` | mark a tool out of quota, so every role skips it |
 | `~/orchestra-skills/scripts/orchestra metrics <run>` | run metrics for the final report |
 | `~/orchestra-skills/scripts/brief-check.sh <card>` | minimum sufficient context: every card must pass before it's sent |
+| `~/orchestra-skills/scripts/orchestra check` | the policy is valid (run after `orchestra set`/`model`). If a CLI you have shows as "not installed", run `orchestra roles --refresh` |
 
 Roles, fallbacks and budget rules: [references/policy.md](references/policy.md). Card formats (task
 card, delta retry, review card): [references/brief-template.md](references/brief-template.md).

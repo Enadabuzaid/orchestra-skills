@@ -104,10 +104,22 @@ START="<!-- orchestra-skills:start -->"
 END="<!-- orchestra-skills:end -->"
 update_marked_file "$CLAUDE_DIR/CLAUDE.md" "$ROOT/CLAUDE.snippet.md" "$START" "$END"
 
-# The `orchestra` command on your PATH (only if ~/.local/bin exists; otherwise use scripts/orchestra).
-if [ -d "$HOME/.local/bin" ]; then
-  safe_link "$ROOT/scripts/orchestra" "$HOME/.local/bin/orchestra"
+# The skill, the agents and the docs refer to ~/orchestra-skills. If this checkout lives somewhere
+# else, link that path to it, so the workflow works from any project without editing anything.
+CANON="$HOME/orchestra-skills"
+if [ "$(cd "$ROOT" && pwd -P)" != "$(cd "$CANON" 2>/dev/null && pwd -P || echo "")" ]; then
+  if [ -e "$CANON" ] && [ ! -L "$CANON" ]; then
+    echo "Note: $CANON exists and is not this checkout; the skill expects it there. Leaving it alone." >&2
+  else
+    safe_link "$ROOT" "$CANON"
+    echo "Linked $CANON -> $ROOT"
+  fi
 fi
+
+# The `orchestra` command on your PATH.
+mkdir -p "$HOME/.local/bin"
+safe_link "$ROOT/scripts/orchestra" "$HOME/.local/bin/orchestra"
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Note: add ~/.local/bin to your PATH to use the \`orchestra\` command (or call $ROOT/scripts/orchestra)." ;; esac
 
 # Default lane map, only if you don't have one yet (never overwrites).
 LANES="${XDG_CONFIG_HOME:-$HOME/.config}/delegate-skills/config.json"
@@ -125,6 +137,8 @@ if [ -d "$CODEX_DIR" ]; then
   echo "Codex: linked orchestrate-portable into $CODEX_DIR/skills and updated $CODEX_DIR/AGENTS.md"
 fi
 
-echo "Installed. Implementer skills come from delegate-skills:"
+echo "Installed. Implementer skills come from delegate-skills (install the ones for the CLIs you have; missing ones are skipped by the policy):"
 echo "  npx skills add amElnagdy/delegate-skills --global --agent claude-code -y \\"
-echo "    --skill codex-delegate --skill agy-delegate --skill claude-delegate --skill copilot-delegate --skill delegate-setup"
+echo "    --skill delegate-setup --skill claude-delegate --skill codex-delegate --skill agy-delegate \\"
+echo "    --skill copilot-delegate --skill kimi-delegate --skill opencode-delegate"
+echo "Then: $ROOT/scripts/doctor.sh [your-project]"

@@ -10,35 +10,39 @@
                          └────────┬────────┘
      ┌──────────────┬─────────────┼─────────────────┬────────────────────┐
      ▼              ▼             ▼                 ▼                    │
-  simple         medium        complex         very-complex              │
-  (no plan)         │             │                 │                    │
-     │              ▼             ▼                 ▼                    │
-     │         ┌─────────────────────────────────────────┐              │
-     │         │ PLANNER lane  (one planner, read-only)  │              │
-     │         │ planner → Fable     planner-hard → Opus │              │
-     │         │ fallback → Opus     alt → GPT-6 Astra   │              │
-     │         └───────────┬─────────────────────────────┘              │
-     │                     │ plan file (tasks, contracts, DoD, Verify)   │
-     │              medium │   complex / very-complex                    │
-     │                     ▼                                             │
-     │         ┌─────────────────────────────────────────┐              │
-     │         │ ARCHITECTURE REVIEW (different family)  │              │
-     │         │ Claude planned → Astra; else → Fable     │              │
-     │         └───────────┬─────────────────────────────┘              │
-     │                     │ APPROVE                                     │
-     ▼                     ▼                                             │
+   tiny           small        feature          complex                  │
+  (no plan)   (light plan,        │                 │                    │
+     │         Sonnet)            ▼                 ▼                    │
+     │              │    ┌─────────────────────────────────────────┐    │
+     │              │    │ PLANNER role (read-only, 1 expensive)   │    │
+     │              │    │ planner → Fable → Astra → Opus          │    │
+     │              │    │ planner-hard (Hard: yes) → Opus → …     │    │
+     │              │    └───────────┬─────────────────────────────┘    │
+     │              │                │ plan file (tasks, contracts, DoD, Verify)
+     │              │        feature │   complex, if architecture/security/payments/migrations
+     │              │                ▼                                   │
+     │              │    ┌─────────────────────────────────────────┐    │
+     │              │    │ SECOND OPINION (different family)       │    │
+     │              │    │ architecture → Astra → Opus             │    │
+     │              │    └───────────┬─────────────────────────────┘    │
+     │              │                │ APPROVE (fixes applied cheaply)   │
+     ▼              ▼                ▼                                   │
 ┌──────────────────────────────────────────────────────────────────┐    │
-│ LANE-RUNNER (Sonnet): one TASK CARD per task (context isolation)  │    │
+│ BUILD (session for tiny/small; LANE-RUNNER on Sonnet otherwise)   │    │
+│ one TASK CARD per task (context isolation, brief-check.sh)        │    │
 │                                                                    │    │
+│  role → orchestra resolve → first AVAILABLE model in its chain     │    │
 │  backend   frontend   tests   refactor   debug   docs   small      │    │
-│     └────────┴────────┴───────┴─────────┴───────┴──────┘          │    │
-│  each task → code-review → ui-review (frontend) → security-review  │    │
-│  (sensitive) → task gate → one commit                              │    │
+│  (Codex, Antigravity, Kimi, DeepSeek, Luna, OpenCode free, Sonnet) │    │
+│                                                                    │    │
+│  gate → delta retry (same session, only the failing check)         │    │
+│  → review by a DIFFERENT model (+ ui-review, security-review)      │    │
+│  → one commit per task                                             │    │
 └──────────────────────────────────┬─────────────────────────────────┘    │
-                                   ▼                                      │
+                                   ▼  (feature, complex)                  │
                     ┌──────────────────────────────┐                     │
                     │ FINAL AUDIT (Opus), once      │  GAPS → fix tasks ──┘
-                    │ checklist + Verify commands   │  (max 3 rounds)
+                    │ checklist + Verify commands   │  (re-verified cheaply)
                     └──────────────┬───────────────┘
                                    ▼ DONE
                                report to you

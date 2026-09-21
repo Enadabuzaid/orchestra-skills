@@ -14,7 +14,10 @@ You ─▶ Claude Opus/Fable plans ─▶ Opus plan-reviewer: APPROVE? ─▶ sh
    (backend, complex)    (ui)              (small, fallback)
           └──────────────────┴────────┬─────────┘
                                       ▼
-                   Sonnet diff-reviewer ─▶ Claude runs tests + commits ─▶ Opus final audit
+                   Sonnet diff-reviewer ─▶ Claude runs tests + commits
+                                      ▼
+            Opus completion-auditor: every plan item done? verify commands pass?
+                 DONE ─▶ report to you        GAPS ─▶ fix tasks ─▶ lanes ─▶ audit again
 ```
 
 ## Why
@@ -25,8 +28,10 @@ In a normal session the most expensive model reads every file and writes every l
 - **Implementers never see your chat.** They get a one-page brief.
 - **Opus reads summaries, not diffs.** Sonnet does the line-by-line review.
 - **Big models run 3–4 times per feature,** not once per file.
-- **Quality stays high:** an Opus gate on every plan, a review of every diff, tests re-run before
-  every commit, and one Opus audit at the end. Implementers never commit.
+- **Quality stays high:** an Opus gate on every plan, a review of every diff, and tests re-run before
+  every commit. At the end an Opus **completion loop** checks every plan item and runs the plan's
+  verify commands, and missing work goes back to the implementers until it returns `DONE`.
+  Implementers never commit.
 
 ## Who does what
 
@@ -41,7 +46,7 @@ In a normal session the most expensive model reads every file and writes every l
 | Small fixes and docs | Claude Sonnet 5 | `small` lane |
 | When a lane fails or hits quota | Claude Sonnet 5 (high) | `fallback` lane |
 | Review each diff | Claude Sonnet 5 | `diff-reviewer` agent |
-| Final audit | Claude Opus 5 | subagent |
+| Decide when it's finished (loops until DONE) | Claude Opus 5 | `completion-auditor` agent |
 
 ## Install (5 minutes)
 
@@ -73,7 +78,9 @@ In Claude Code, on Opus (or Fable for hard features):
 > Use orchestrate to add CSV export to the reports page.
 
 Claude plans, gets `APPROVE` from Opus, sends tasks to the lanes, has each diff reviewed, re-runs the
-tests, commits task by task and finishes with an Opus audit. You review `git log` and push.
+tests and commits task by task. Then Opus checks every plan item and runs the verify commands,
+sending any gaps back to the implementers until everything is `DONE`, and Claude reports what was
+built and how it was verified. You review `git log` and push.
 
 ## Tested
 
@@ -94,9 +101,10 @@ tests, commits task by task and finishes with an Opus audit. You review `git log
 
 | Path | Purpose |
 |---|---|
-| `skills/orchestrate/` | The 7-stage workflow skill and the brief template |
+| `skills/orchestrate/` | The 8-stage workflow skill plus the plan and brief templates |
 | `agents/plan-reviewer.md` | Opus plan gate: `APPROVE` or numbered fixes |
 | `agents/diff-reviewer.md` | Sonnet per-task reviewer: `PASS` / `FAIL` |
+| `agents/completion-auditor.md` | Opus completion gate: `DONE` / `GAPS` |
 | `CLAUDE.snippet.md` | Rules added to `~/.claude/CLAUDE.md` |
 | `examples/lanes.json` | The default lane map |
 | `examples/demo-app/` | A tiny app for the end-to-end test |
@@ -104,6 +112,7 @@ tests, commits task by task and finishes with an Opus audit. You review `git log
 | `scripts/doctor.sh` | Checks the setup (changes nothing) |
 | `scripts/smoke-test.sh` | Real test of every lane |
 | `scripts/agy-allow.sh` | Scoped Antigravity write permission for a folder |
+| `scripts/token-report.sh` | Tokens per delegated run, and which quota paid |
 
 ## Credits
 

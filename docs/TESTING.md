@@ -6,7 +6,7 @@ There are three levels of testing. Run them in order: each one assumes the one b
 |---|---|---|---|
 | 1. Doctor | `scripts/doctor.sh` | seconds | Everything is installed, linked and configured, and the CLIs are logged in |
 | 2. Lane smoke test | `scripts/smoke-test.sh` | ~1–2 min | Every lane really runs its CLI, writes code (or answers read-only), and never commits |
-| 3. End-to-end | the prompt below, in Claude Code | ~10 min | The full workflow: plan → Opus gate → lanes → Sonnet review → commit → Opus audit |
+| 3. End-to-end | the prompt below, in Claude Code | ~10 min | The full workflow: plan → Opus gate → lanes → Sonnet review → commit → Opus completion loop |
 
 ## 1. Doctor
 
@@ -67,7 +67,7 @@ What you should see:
 3. T1 → Codex and T2 → Antigravity running at the same time, then T3 → Claude Sonnet.
 4. A `diff-reviewer` `PASS`/`FAIL` per task.
 5. One commit per task, made by Claude.
-6. A final Opus audit.
+6. The Opus completion loop: `DONE`, or `GAPS` turned into fix tasks until `DONE`.
 
 Check afterwards: `git log --oneline` shows the plan and the task commits, and `node --test` is green.
 
@@ -115,3 +115,28 @@ tokens each); all the code was written on Codex, Antigravity and Sonnet.
 | small | claude (sonnet) | PASS |
 | fallback | claude (sonnet, high) | PASS |
 | copilot-review | copilot (read-only) | FAIL: monthly premium quota used up (402), so it couldn't be tested this month. Its headless writes also need `--allow-all-tools`, which is why this lane is read-only |
+
+## Completion-loop test (2026-09-21)
+
+This checks that Opus refuses to call a feature finished when an implementer only *claims* it is
+done. On a branch of the demo, all three tasks were marked `done` in the plan, but the README (T3)
+was never delivered. The plan had a Definition of Done and Verify commands (from
+`references/plan-template.md`).
+
+| Round | `completion-auditor` (Opus) | What happened |
+|---|---|---|
+| 1 | **GAPS** | Checked 11 plan items with `file:line` evidence and ran `node --test` (40/40) plus the runtime check. Found `README.md missing … plan says T3 "done"`, and wrote the fix task with lane `small` |
+| – | – | Gap G1 → Claude Sonnet (`small`) → gate 40/40 → committed, with the plan's task table and gap log updated |
+| 2 | **DONE** | All items checked. It also ran all 12 README examples, and their output matched the documented results exactly. It listed the browser check as `manual` for the human |
+
+Opus usage: ~46k tokens (round 1) + ~53k tokens (round 2). All the fixing was done on Sonnet.
+
+Measured per-run usage (`scripts/token-report.sh`) for the end-to-end run:
+
+```
+RUN           LANE      TOOL    MODEL                 STATUS     IN TOKENS   OUT      USD     PAID BY
+run-T1        backend   codex   default               completed  113,633     1,905    –       ChatGPT
+run-T2        ui        agy     gemini-3.8-flash-high completed  –           –        –       Google
+run-T3        small     claude  sonnet                completed  82,064      2,469    $0.077  Claude
+run-T3fix     small     claude  sonnet                completed  183,085     3,102    $0.093  Claude
+```

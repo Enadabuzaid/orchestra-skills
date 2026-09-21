@@ -43,7 +43,8 @@ orchestra-skills splits the work that way:
                                                  ▼
                            Claude re-runs tests and commits (only Claude commits)
                                                  ▼
-                                  Opus final audit of the whole feature
+                     Opus completion-auditor: every plan item + verify commands
+                         DONE ──▶ report to you      GAPS ──▶ fix tasks ──▶ lanes ──▶ audit again
 ```
 
 The main Claude session is the **orchestrator**. It never hands its long chat history to anyone.
@@ -65,9 +66,10 @@ Files installed on your machine:
 
 | Path | What it is |
 |---|---|
-| `~/.claude/skills/orchestrate/` | The 7-stage workflow (symlink to this repo) |
+| `~/.claude/skills/orchestrate/` | The 8-stage workflow (symlink to this repo) |
 | `~/.claude/agents/plan-reviewer.md` | Opus subagent that approves or rejects plans |
 | `~/.claude/agents/diff-reviewer.md` | Sonnet subagent that reviews each task's diff |
+| `~/.claude/agents/completion-auditor.md` | Opus subagent that decides when the feature is really finished |
 | `~/.claude/CLAUDE.md` | A short block of rules between `orchestra-skills` markers |
 | `~/.claude/skills/*-delegate/` | The implementer skills from delegate-skills |
 | `~/.config/delegate-skills/config.json` | Your lanes: which CLI and model does which job |
@@ -87,7 +89,7 @@ Because the skill and agents are **symlinks**, `git pull` in this repo updates t
 | Small fixes, docs, lint | **Claude Sonnet 5** (`small` lane) | Cheap and precise |
 | When a lane fails or hits its quota | **Claude Sonnet 5, high effort** (`fallback` lane) | Reliable backup |
 | Review each diff | **Claude Sonnet 5** (`diff-reviewer`) | Reads line by line so Opus doesn't have to |
-| Final check of the feature | **Claude Opus 5** | One careful look at everything together |
+| Decide when it's finished (loops until DONE) | **Claude Opus 5** (`completion-auditor`) | Checks every plan item and runs the verify commands |
 | Extra opinion (optional) | **Copilot** (`copilot-review` lane, read-only) | When you have Copilot quota to spare |
 
 ## 4. Install, step by step
@@ -120,7 +122,7 @@ git clone https://github.com/Enadabuzaid/orchestra-skills ~/orchestra-skills
 ~/orchestra-skills/install.sh
 ```
 
-`install.sh` links the skill and the two agents into `~/.claude`, adds the rules block to
+`install.sh` links the skill and the three agents into `~/.claude`, adds the rules block to
 `~/.claude/CLAUDE.md`, and writes the default lanes if you don't have any yet. It is safe to run again.
 
 **Step 4. Let Antigravity write in your project folders** (only if you use the `ui` lane).
@@ -196,11 +198,24 @@ end-to-end test and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if a lane fails.
 8. **Claude commits.** Claude runs the tests once more and commits each task with a clear message.
    Implementers never commit, and nothing is pushed.
 
-9. **Final audit.** One Opus pass over the whole feature checks for missing tasks and for bugs
-   between tasks (for example task A and task B disagreeing on a data shape). Fixes go through the
-   `small` lane.
+9. **Completion loop (Opus decides when it's finished).** The `completion-auditor` (Opus) goes
+   through every task and every **Definition of Done** item in the plan and checks each one against
+   the real code, with `file:line` evidence. It runs every **Verify** command (tests, static
+   analysis, build, and a runtime check that actually exercises the feature), checks that tasks from
+   different implementers fit together, and looks for leftovers such as debug code, TODOs or
+   uncommitted files.
+   - **DONE**: the feature is finished.
+   - **GAPS**: each gap becomes a new task (`G1`, `G2`, …) that goes through a lane, the reviewer
+     and a commit, then the auditor runs again. Up to 3 rounds; after that Claude shows you what's
+     left instead of pretending it's finished.
 
-10. **You review and push.** Look at `git log` and push when you're happy.
+   Claude never tells you a feature is finished without the auditor's `DONE`.
+
+10. **Final report.** Claude lists what was built (task → commit → implementer), each verify
+    command and its result, what the gates caught along the way, and anything left for you to
+    check by hand (for example "open the page and click X").
+
+11. **You review and push.** Look at `git log` and push when you're happy.
 
 ## 7. What happens at each stage
 
@@ -213,7 +228,8 @@ end-to-end test and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if a lane fails.
 | 4 Implement | lanes | brief only | code changes + `result.json` | **none** (other quotas) |
 | 5 Review | Sonnet `diff-reviewer` | brief + diff | `PASS`/`FAIL` + findings | Sonnet, not Opus |
 | 6 Land | orchestrator | reviewer summary | tests re-run + commit | small |
-| 7 Final audit | Opus | whole feature diff + plan | findings | yes, once |
+| 7 Completion loop | Opus `completion-auditor` | plan + diff from the base commit + verify commands | `DONE` / `GAPS` → fix tasks | yes, 1–3 short runs |
+| 8 Report | orchestrator | auditor output | summary to you | small |
 
 A **brief** is the only thing an implementer ever sees. It follows
 [`skills/orchestrate/references/brief-template.md`](../skills/orchestrate/references/brief-template.md):
@@ -288,8 +304,30 @@ lane with the same name. Claude asks you before trusting a project file.
 - **Resuming instead of restarting.** Follow-ups go to the same implementer session
   (`--session <id>`) with only the change needed.
 
-Check it: run `/cost` at the end of an orchestrated session and compare it with a session where
+### Measure it
+
+```bash
+~/orchestra-skills/scripts/token-report.sh "$TMPDIR"/delegate-relay/*   # every delegated run
+```
+
+It shows each run's lane, model, tokens, and which quota paid for it. Real numbers from the demo
+test (see [TESTING.md](TESTING.md)):
+
+```
+RUN           LANE      TOOL    MODEL                 STATUS     IN TOKENS   OUT      USD     PAID BY
+run-T1        backend   codex   default               completed  113,633     1,905    –       ChatGPT
+run-T2        ui        agy     gemini-3.8-flash-high completed  –           –        –       Google
+run-T3        small     claude  sonnet                completed  82,064      2,469    $0.077  Claude
+```
+
+The biggest job (T1, 113k tokens of code reading and writing) cost **zero Claude tokens**. The
+Claude-side cost of the whole feature was the Opus gates (plan review ~10–13k, completion audit
+~46k, per the subagent usage lines), the Sonnet reviewers (~17–18k each), and a few cents of Sonnet
+for the docs task. Also run `/cost` at the end of the session and compare it with a session where
 Opus did everything.
+
+**Where the loop costs tokens:** each extra audit round is another Opus run of about 45k tokens.
+That's why plans must have a clear Definition of Done: a precise plan usually passes in one round.
 
 ## 12. Using it without orchestrate
 
@@ -314,6 +352,7 @@ You can also delegate a single task directly:
 | Send one task somewhere specific | *"Use codex-delegate --lane complex to …"* |
 | See my lanes | `~/orchestra-skills/scripts/doctor.sh` |
 | Test every lane | `~/orchestra-skills/scripts/smoke-test.sh` |
+| See what each run cost and who paid | `~/orchestra-skills/scripts/token-report.sh "$TMPDIR"/delegate-relay/*` |
 | Let Antigravity write in a folder | `~/orchestra-skills/scripts/agy-allow.sh <folder>` |
 | Update orchestra-skills | `cd ~/orchestra-skills && git pull` |
 | Update delegate-skills | re-run the `npx skills add amElnagdy/delegate-skills …` line |

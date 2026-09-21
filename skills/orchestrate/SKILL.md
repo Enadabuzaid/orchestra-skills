@@ -5,7 +5,7 @@ description: >-
   typing: plan with Fable/Opus, gate the plan through an Opus plan-reviewer until APPROVE, split it
   into self-contained briefs, dispatch each brief to a delegate-skills lane (complex=codex astra,
   backend=codex, ui=agy, small=claude sonnet, fallback=claude sonnet), review each diff with a
-  Sonnet diff-reviewer, land commits yourself, then run one final Opus audit. Use when the user says "orchestrate",
+  Sonnet diff-reviewer, land commits yourself, then loop an Opus completion-auditor (runs plan checklist + verify commands) until DONE. Use when the user says "orchestrate",
   "plan and delegate", "big model plans, cheap model builds", or wants to save tokens on a
   multi-task feature. DO NOT USE for a one-file change you can make inline faster than writing a brief.
 license: MIT
@@ -30,15 +30,23 @@ plan gate, optional second opinion, final audit). Everything line-by-line runs o
 | Large / complicated tasks | GPT-6 Astra | `complex` lane |
 | Normal tasks | Codex default, Gemini Flash, Sonnet | `backend`, `ui`, `small` lanes |
 | Diff review | Sonnet 5 | `diff-reviewer` subagent |
-| Final audit | Opus 5 | subagent with `model: "opus"` |
+| Completion check (loops until DONE) | Opus 5 | `completion-auditor` subagent |
 
 ## Stage 1 — Plan (big model)
 
 - If the current session model is Fable or Opus, plan here. Otherwise dispatch the `Plan` agent with
   `model: "fable"` (or `"opus"`) and give it the requirements plus relevant file paths.
 - Write the plan to a file (`docs/plans/<date>-<feature>.md` in the repo, or the plan-mode file).
-- The plan must list **tasks**, each small enough for one brief: goal, files to touch, acceptance
-  tests, lane (`complex` / `backend` / `ui` / `small`), and dependencies between tasks.
+- Record the **base commit** (`git rev-parse HEAD`) at the top of the plan. The final audit diffs from it.
+- Use [references/plan-template.md](references/plan-template.md). The plan must contain:
+  - **Tasks**, each small enough for one brief: goal, files, acceptance tests, lane
+    (`complex` / `backend` / `ui` / `small`), dependencies, and a `Status` column (`todo` / `done`).
+  - **Definition of Done**: a checklist of user-visible outcomes, not just "tests pass". For example:
+    "admin can deactivate a provider from the list page", "a deactivated provider can't log in".
+  - **Verify**: the exact commands that prove it works: the full test suite, static analysis, the
+    formatter check, the build, and at least one runtime check (curl a route, an artisan command,
+    or a script that exercises the feature). Mark anything that needs a human (for example a
+    browser check) as `manual`.
 
 ## Stage 2 — Plan gate (Opus recheck, mandatory)
 
@@ -96,13 +104,37 @@ repo's gate commands. It returns `PASS` or `FAIL` with findings.
 ## Stage 6 — Land
 
 Re-run the gates yourself (never trust a self-report), then commit with a conventional message.
-Implementers never commit.
+Implementers never commit. Set the task's `Status` to `done` in the plan in the same commit, so the
+plan is always the source of truth for progress.
 
-## Stage 7 — Final audit (Opus, once)
+Don't start Stage 7 while any task is still `todo`.
 
-Dispatch a subagent with `model: "opus"` over the whole branch diff vs the approved plan: missing
-tasks, cross-task integration bugs, DB-portability issues (e.g. tests on SQLite but prod on Postgres),
-security. Fix findings through the `small` lane.
+## Stage 7 — Completion loop (Opus decides when it's finished)
+
+Implementation being finished doesn't mean the feature is finished. Dispatch the
+`completion-auditor` subagent (Opus) with the plan path, the repo path, and the base commit. It
+checks every task and every **Definition of Done** item against the code, runs every **Verify**
+command, checks that tasks from different implementers fit together, and looks for leftovers.
+
+- `DONE` → go to Stage 8.
+- `GAPS` → each gap becomes a new task. Add it to the plan's task table as `G1`, `G2`, … (`todo`),
+  write a brief, send it to the lane the auditor suggested, then `diff-reviewer`, then land it as
+  in Stages 4–6. Then run `completion-auditor` again.
+- Maximum 3 rounds. If there are still gaps after round 3, stop and show the user the remaining gaps
+  with the auditor's evidence. Never report the feature as finished while the auditor says `GAPS`.
+
+For large or risky features, you may also send the final diff to the read-only `plan-check` lane
+(GPT-6 Astra) for a second opinion. Feed real findings back into the loop.
+
+## Stage 8 — Report to the user
+
+Only after `DONE`. Keep it short and factual:
+
+- what was built (one line per task, with its commit hash and implementer);
+- the verification results: each **Verify** command and whether it passed, with the auditor's output
+  as evidence;
+- what the gates caught along the way (plan-review rounds, `FAIL`s, gaps fixed);
+- anything the user still needs to do or check by hand (the auditor's `manual` items, and pushing).
 
 ## Hard rules
 

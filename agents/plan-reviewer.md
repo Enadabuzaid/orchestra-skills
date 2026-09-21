@@ -20,6 +20,12 @@ Check the plan against the real code, not against your assumptions:
    paths covered?
 6. **Risk** — data migrations, deletes, auth/permissions, money, DB portability (SQLite tests vs
    Postgres prod), destructive commands.
+7. **Provable finish** — the plan must have a **Definition of Done** made of user-visible outcomes
+   (not just "tests pass") and a **Verify** section with real commands that work in this repo
+   (check that the scripts and binaries exist): full tests, static analysis, format check, build,
+   and at least one runtime check that exercises the feature. `manual` is allowed only for checks
+   that genuinely need a human. It must also record a base commit and have a Status column. A plan
+   whose finish can't be proven is `CHANGES REQUIRED`.
 
 Output exactly one of:
 

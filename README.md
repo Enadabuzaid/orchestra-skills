@@ -20,18 +20,21 @@ You ─▶ Claude Opus/Fable plans ─▶ Opus plan-reviewer: APPROVE? ─▶ sh
                  DONE ─▶ report to you        GAPS ─▶ fix tasks ─▶ lanes ─▶ audit again
 ```
 
-## Why
+## Why: the token model
 
-In a normal session the most expensive model reads every file and writes every line. Here:
+Most tokens in a coding session go to **typing** (reading files, writing code, running tests) and to
+**repeated context** (the same conversation sent to every call). Orchestra cuts both:
 
-- **Coding runs on other quotas:** your ChatGPT plan (Codex), Google (Antigravity), or cheap Sonnet.
-- **Implementers never see your chat.** They get a one-page brief.
-- **Opus reads summaries, not diffs.** Sonnet does the line-by-line review.
-- **Big models run 3–4 times per feature,** not once per file.
-- **Quality stays high:** an Opus gate on every plan, a review of every diff, and tests re-run before
-  every commit. At the end an Opus **completion loop** checks every plan item and runs the plan's
-  verify commands, and missing work goes back to the implementers until it returns `DONE`.
-  Implementers never commit.
+| Lever | What it does | Measured |
+|---|---|---|
+| **Route before anything expensive** | a Haiku router classifies tiny / small / feature / complex; each level gets only its process | "change one error message": route → card → Sonnet → test → commit, **0 expensive calls, $0.25, 91s** |
+| **Minimum sufficient context** | builders and reviewers get one short card, never the conversation; retries send only the failing check | cards are 100–250 words; `brief-check.sh` rejects leaks |
+| **ROLE → MODEL with fallbacks** | "I need a backend builder" → Codex → Kimi → DeepSeek → Sonnet, by live availability and quota | Codex out of quota → backend fell back to Sonnet automatically |
+| **A budget of expensive calls** | a normal feature = Fable once + Opus once; a complex one adds one second opinion | `orchestra budget spend` refuses the 4th expensive call |
+| **Planner ≠ Builder ≠ Reviewer** | independent review by another model; second opinions from another family | Astra found a real date bug in a Fable plan before any code |
+| **Other subscriptions do the typing** | Codex on ChatGPT, Antigravity on Google, Kimi/DeepSeek on theirs | a 113k-token backend task cost 0 Claude tokens |
+
+Full results, including the failures found along the way: [docs/TESTING.md](docs/TESTING.md).
 
 ## Who does what
 
@@ -134,7 +137,7 @@ built and how it was verified. You review `git log` and push.
 
 **Enad Abuzaid** · [@Enadabuzaid](https://github.com/Enadabuzaid)
 
-Issues and pull requests are welcome. See [CHANGELOG.md](CHANGELOG.md) for versions.
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Versions: [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
 

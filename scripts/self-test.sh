@@ -108,6 +108,25 @@ for (const arr of [a,b]) { if (!arr.includes(`write_file(${project})`) || !arr.s
 JS
 pass "Antigravity helper updates both known config schemas"
 
+printf '%s\n' "Task cards (context isolation)"
+CARD="$TMP/card.md"
+awk '/^## Example/{f=1;next} /^Why the second/{f=0} f' "$ROOT/skills/orchestrate/references/brief-template.md" | sed -n '/^```markdown/,/^```$/p' | sed '1d;$d' > "$CARD"
+"$ROOT/scripts/brief-check.sh" "$CARD" >/dev/null || fail "brief-check rejected the template's own example card"
+{ cat "$CARD"; echo "As we discussed earlier in the chat, go with option A."; } > "$TMP/leak.md"
+if "$ROOT/scripts/brief-check.sh" "$TMP/leak.md" >/dev/null 2>&1; then fail "brief-check accepted a card with leaked conversation context"; fi
+grep -v "You are the implementer" "$CARD" > "$TMP/noguard.md"
+if "$ROOT/scripts/brief-check.sh" "$TMP/noguard.md" >/dev/null 2>&1; then fail "brief-check accepted a card without the implementer guard"; fi
+pass "brief-check accepts the example card, rejects leaks and missing guard"
+
+printf '%s\n' "Job lanes"
+LCFG="$TMP/lanes-home/.config"; mkdir -p "$LCFG/delegate-skills"
+printf '%s\n' '{"version":"delegate-fleet.v1","lanes":{"ui":{"implementer":"agy"},"review":{"implementer":"claude","readOnly":true}}}' > "$LCFG/delegate-skills/config.json"
+r1="$(XDG_CONFIG_HOME="$LCFG" "$ROOT/scripts/lanes.sh" resolve frontend 2>&1)" || fail "lanes resolve frontend failed on an old-style config: $r1"
+printf '%s' "$r1" | grep -q "lane=ui tool=agy" || fail "frontend did not resolve to the old ui lane: $r1"
+r2="$(XDG_CONFIG_HOME="$LCFG" "$ROOT/scripts/lanes.sh" resolve code-review 2>&1)" || fail "lanes resolve code-review failed: $r2"
+node -e 'const fs=require("fs");for(const f of process.argv.slice(1)){const c=JSON.parse(fs.readFileSync(f,"utf8"));for(const n of Object.keys(c.lanes)) if(/^(codex|agy|claude|kimi|deepseek|copilot|opencode)(-|$)/.test(n)){console.error(`${f}: vendor-named lane ${n}`);process.exit(1)}}' "$ROOT"/examples/lanes*.json || fail "a preset has a vendor-named lane"
+pass "jobs resolve through old names; presets have no vendor-named lanes"
+
 printf '%s\n' "Token report discovery"
 RUNROOT="/tmp/orchestrate/orchestra-selftest-$$/T1/run"; mkdir -p "$RUNROOT"
 printf '%s\n' '{"status":"completed","lane":"backend","tool":"codex","model":"test"}' > "$RUNROOT/result.json"

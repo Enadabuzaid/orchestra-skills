@@ -92,6 +92,7 @@ built and how it was verified. You review `git log` and push.
 
 ## Docs
 
+- **[docs/EXAMPLE.md](docs/EXAMPLE.md)**: a real example ("make sure patient login and register work"): where to type, what you'll see at each step, and who pays
 - **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide, from install and first feature to lanes,
   models, permissions and token savings
 - [docs/TESTING.md](docs/TESTING.md): **test it yourself, step by step** (doctor → lane smoke test → automated end-to-end → watch it live → token check), with recorded results

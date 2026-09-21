@@ -11,6 +11,7 @@
 #   lanes.sh use <preset>                      switch to a ready-made map (see: lanes.sh presets)
 #   lanes.sh presets                           list ready-made maps
 #   lanes.sh models <tool>                     list the models a tool offers
+#   lanes.sh resolve <job>                     which configured lane does this job (accepts old names)
 #   lanes.sh undo                              restore the previous lanes
 #
 # Tools: codex, agy (Antigravity), claude, copilot (and any other delegate-skills implementer).
@@ -99,6 +100,20 @@ case "$cmd" in
       fs.writeFileSync(out, JSON.stringify(c, null, 2) + "\n");
     ' "$CONFIG" "$tmp" "$from" "$to" "$@"
     save "$tmp"; rm -f "$tmp" ;;
+
+  resolve)
+    job="${1:?usage: lanes.sh resolve <job>}"
+    node -e '
+      const c = require(process.argv[1]); const job = process.argv[2];
+      // Job → older names that still count (see skills/orchestrate/references/lanes.md).
+      const legacy = { frontend: ["ui"], "code-review": ["review"], "ui-review": ["ui-check", "frontend-check"],
+        "architecture-review": ["plan-check"], "architecture-review-alt": ["plan-gate"], "final-audit": ["done-gate"] };
+      for (const name of [job, ...(legacy[job] || [])]) {
+        const l = c.lanes[name];
+        if (l) { console.log(`lane=${name} tool=${l.implementer} model=${l.model || "default"}${l.readOnly ? " readOnly" : ""}`); process.exit(0); }
+      }
+      console.error(`no lane configured for job "${job}"`); process.exit(1);
+    ' "$CONFIG" "$job" ;;
 
   presets)
     for f in "$ROOT"/examples/lanes*.json; do

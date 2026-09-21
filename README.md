@@ -93,6 +93,7 @@ built and how it was verified. You review `git log` and push.
 
 ## Docs
 
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: the design in one page: router → planner lane → different-AI review → job lanes with task cards → final audit
 - **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. "I opened Claude Code, what now?" in one page
 - **[docs/CODEX.md](docs/CODEX.md)**: run everything from the **Codex app** (Astra plans, Claude Fable/Opus check, lanes build)
 - **[docs/LANES.md](docs/LANES.md)**: change who does what (backend, ui, checkers, "Codex hit its limit"), one command each
@@ -116,7 +117,9 @@ built and how it was verified. You review `git log` and push.
 | `examples/lanes.json` | The default lane map |
 | `examples/demo-app/` | A tiny app for the end-to-end test |
 | `install.sh` | Links everything into `~/.claude` (safe to re-run) |
-| `scripts/lanes.sh` | Change lanes: show / set / remove / replace / use preset / undo |
+| `scripts/lanes.sh` | Change lanes: show / set / remove / replace / use preset / resolve / undo |
+| `scripts/brief-check.sh` | Rejects task cards that are incomplete, too long, or leak context |
+| `agents/task-router.md` | Haiku router: simple / medium / complex / very-complex |
 | `scripts/doctor.sh` | Checks the setup (changes nothing) |
 | `scripts/smoke-test.sh` | Real test of every lane |
 | `scripts/agy-allow.sh` | Scoped Antigravity write permission for a folder |

@@ -3,6 +3,39 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
+## [0.5.0] - 2026-09-21
+
+### Added
+- **Task router** (`agents/task-router.md`, Haiku): simple / medium / complex / very-complex. Simple
+  work gets one task card and no plan; medium gets a plan but no architecture review; only
+  complex+ pays for the review.
+- **Planner lanes**: `planner` (Fable), `planner-hard` (Opus, very-complex), and the fallback chain
+  `planner-fallback` (Opus) → `planner-alt` (GPT-6 Astra). Planning runs read-only in a lane, so the
+  main session can run on Sonnet.
+- **Architecture review by a different model family**: `architecture-review` (Astra), or
+  `architecture-review-alt` (Fable) when the planner was the same family. The revise loop reuses the
+  planner's session. Tested: Astra caught a real `Date.UTC` year-0–99 bug in a Fable plan; the
+  revised plan was approved.
+- **Context isolation**: a strict task-card format (TASK / Goal / Files / Contract / Rules /
+  Acceptance / Do not) and `scripts/brief-check.sh`, which rejects cards that are incomplete, over
+  450 words, or show leaked context.
+- **Job lanes, not vendors**: `backend`, `frontend`, `tests`, `refactor`, `debug`, `docs`,
+  `code-review`, `ui-review`, `security-review`, `final-audit`, `small`, `fallback`
+  (`references/lanes.md`). Also `lanes.sh resolve <job>` (accepts the older names), a `debug` step
+  for failing gates, and `<job>-fallback` chains for every job.
+- `docs/ARCHITECTURE.md`.
+
+### Fixed
+- **Implementers no longer orchestrate.** Workers load the same global rules as orchestrators, and
+  in testing a Codex worker started orchestrating its own task. The rules now apply only to the
+  top-level session, and every task card says "You are the implementer…" (enforced by
+  `brief-check.sh`).
+
+### Changed
+- Presets use job names only (no vendor-named lanes). The default preset is the ORCHESTRA layout.
+  Older lane names (`ui`, `review`, `ui-check`, `plan-check`, `plan-gate`, `done-gate`) are still
+  resolved.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added

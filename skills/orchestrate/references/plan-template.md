@@ -1,6 +1,10 @@
 # Plan template
 
 Save as `docs/plans/<YYYY-MM-DD>-<feature>.md` in the repo and commit it before any code is written.
+Lanes are **jobs** (see `references/lanes.md`): `backend`, `frontend`, `tests`, `refactor`, `debug`,
+`docs`, `small`. Never name a vendor. Mark tasks that touch auth, payments, permissions, uploads or
+crypto `Sensitive: yes` so they get a security review. Medium-route plans can be short, but they
+still need a Definition of Done and a Verify section.
 
 ```markdown
 # Plan: <feature>
@@ -20,10 +24,12 @@ once here, so parallel implementers agree.>
 
 ## Tasks
 
-| ID | Task | Lane | Files | Depends on | Status |
-|---|---|---|---|---|---|
-| T1 | <one line> | backend | <paths> | – | todo |
-| T2 | <one line> | ui | <paths> | T1 contract | todo |
+| ID | Task | Job | Files | Depends on | Sensitive | Status |
+|---|---|---|---|---|---|---|
+| T1 | <one line> | backend | <paths> | – | yes/no | todo |
+| T2 | <one line> | frontend | <paths> | T1 contract | no | todo |
+| T3 | tests for T1/T2 edge cases | tests | <test paths> | T1, T2 | no | todo |
+| T4 | README / API docs | docs | <doc paths> | T1, T2 | no | todo |
 
 ### T1: <name>
 - What to build, precisely.

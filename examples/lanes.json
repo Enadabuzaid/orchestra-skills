@@ -1,24 +1,91 @@
 {
   "version": "delegate-fleet.v1",
   "lanes": {
-    "plan-check": {
+    "planner": {
+      "implementer": "claude",
+      "model": "fable",
+      "effort": "high",
+      "readOnly": true
+    },
+    "planner-hard": {
+      "implementer": "claude",
+      "model": "opus",
+      "effort": "high",
+      "readOnly": true
+    },
+    "planner-fallback": {
+      "implementer": "claude",
+      "model": "opus",
+      "effort": "high",
+      "readOnly": true
+    },
+    "planner-alt": {
       "implementer": "codex",
       "model": "gpt-6-astra",
       "effort": "high",
       "readOnly": true
     },
-    "complex": {
+    "architecture-review": {
       "implementer": "codex",
       "model": "gpt-6-astra",
-      "effort": "high"
+      "effort": "high",
+      "readOnly": true
+    },
+    "architecture-review-alt": {
+      "implementer": "claude",
+      "model": "fable",
+      "effort": "high",
+      "readOnly": true
+    },
+    "final-audit": {
+      "implementer": "claude",
+      "model": "opus",
+      "effort": "high",
+      "readOnly": true
     },
     "backend": {
       "implementer": "codex",
       "effort": "medium"
     },
-    "ui": {
+    "frontend": {
       "implementer": "agy",
       "model": "gemini-3.8-flash-high"
+    },
+    "ui-review": {
+      "implementer": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "medium",
+      "readOnly": true
+    },
+    "tests": {
+      "implementer": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "medium"
+    },
+    "refactor": {
+      "implementer": "codex",
+      "effort": "medium"
+    },
+    "debug": {
+      "implementer": "codex",
+      "effort": "high"
+    },
+    "docs": {
+      "implementer": "claude",
+      "model": "haiku",
+      "effort": "low"
+    },
+    "code-review": {
+      "implementer": "claude",
+      "model": "haiku",
+      "effort": "medium",
+      "readOnly": true
+    },
+    "security-review": {
+      "implementer": "claude",
+      "model": "sonnet",
+      "effort": "high",
+      "readOnly": true
     },
     "small": {
       "implementer": "claude",
@@ -29,10 +96,6 @@
       "implementer": "claude",
       "model": "sonnet",
       "effort": "high"
-    },
-    "copilot-review": {
-      "implementer": "copilot",
-      "readOnly": true
     }
   }
 }

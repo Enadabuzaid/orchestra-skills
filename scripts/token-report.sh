@@ -12,7 +12,10 @@ set -uo pipefail
 
 if [ $# -eq 0 ] || { [ $# -eq 1 ] && [ ! -d "$1" ]; }; then
   name="${1:-}"; proj="${1:-*}"; shopt -s nullglob
-  candidates=( "${TMPDIR:-/tmp}"/orchestrate/$proj/*/run /tmp/orchestrate/$proj/*/run )
+  # Every result.json under the run folders (the runner nests run/, run2/, review/…).
+  candidates=()
+  while IFS= read -r f; do candidates+=("$(dirname "$f")"); done < <(
+    find "${TMPDIR:-/tmp}"/orchestrate/$proj /tmp/orchestrate/$proj -name result.json 2>/dev/null)
   runs=()
   for d in ${candidates[@]+"${candidates[@]}"}; do
     [ -d "$d" ] || continue

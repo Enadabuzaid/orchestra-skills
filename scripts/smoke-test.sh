@@ -82,7 +82,9 @@ EOF
   fi
 
   local start=$SECONDS
-  node "$relay" --lane "$lane" --brief "$brief" --cd "$dir" --timeout "$TIMEOUT" --out-dir "$WORK/$lane.run" >"$out" 2>&1
+  # Claude lanes use your claude.ai subscription, not an API key (set ORCHESTRA_USE_API_KEY=1 to keep it).
+  local unset_key=(); [ "$impl" = "claude" ] && [ -z "${ORCHESTRA_USE_API_KEY:-}" ] && unset_key=(-u ANTHROPIC_API_KEY)
+  env ${unset_key[@]+"${unset_key[@]}"} node "$relay" --lane "$lane" --brief "$brief" --cd "$dir" --timeout "$TIMEOUT" --out-dir "$WORK/$lane.run" >"$out" 2>&1
   local secs=$((SECONDS - start))
   result="$WORK/$lane.run/result.json"
   status="$(node -e 'try{process.stdout.write(require(process.argv[1]).status||"")}catch{process.stdout.write("no-result")}' "$result")"

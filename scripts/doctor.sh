@@ -37,6 +37,14 @@ else
   fail "no lane config: copy examples/lanes.json there or run delegate-setup"
 fi
 
+echo "Claude billing"
+if [ -n "${ANTHROPIC_API_KEY:-}" ] && ! grep -qs 'env -u ANTHROPIC_API_KEY command claude' ~/.zshrc ~/.bashrc ~/.bash_profile; then
+  echo "  ! ANTHROPIC_API_KEY is set: Claude Code and the Claude lanes bill that API key, not your subscription."
+  echo "    To use your subscription: add  claude() { env -u ANTHROPIC_API_KEY command claude \"\$@\"; }  to ~/.zshrc"
+else
+  pass "Claude runs use your claude.ai login ($(env -u ANTHROPIC_API_KEY claude auth status 2>/dev/null | node -e 'try{const a=JSON.parse(require("fs").readFileSync(0));console.log(a.authMethod||"?")}catch{console.log("?")}'))"
+fi
+
 echo "Implementer CLIs (installed / logged in)"
 DISCOVER="$CLAUDE_DIR/skills/delegate-setup/scripts/discover.mjs"
 if [ -f "$DISCOVER" ]; then

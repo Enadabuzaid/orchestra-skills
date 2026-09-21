@@ -52,7 +52,9 @@ As the very last line of your reply, print exactly one of:
 E2E-RESULT: DONE
 E2E-RESULT: GAPS"
 START=$SECONDS
-env -u CLAUDECODE claude -p "$PROMPT" --model "$MODEL" --output-format json \
+# Use the claude.ai subscription, not an API key (set ORCHESTRA_USE_API_KEY=1 to keep the key).
+UNSET_KEY=(-u ANTHROPIC_API_KEY); [ -n "${ORCHESTRA_USE_API_KEY:-}" ] && UNSET_KEY=()
+env -u CLAUDECODE ${UNSET_KEY[@]+"${UNSET_KEY[@]}"} claude -p "$PROMPT" --model "$MODEL" --output-format json \
   --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Agent,Task,Skill" > "$LOG" 2>"$WORK/claude.err"
 echo "  finished in $(( (SECONDS - START) / 60 ))m $(( (SECONDS - START) % 60 ))s (log: $LOG)"
 

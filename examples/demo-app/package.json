@@ -1,0 +1,5 @@
+{
+  "name": "orchestra-demo-app",
+  "private": true,
+  "scripts": { "test": "node --test" }
+}

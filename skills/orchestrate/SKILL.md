@@ -3,9 +3,9 @@ name: orchestrate
 description: >-
   Run a feature end-to-end with expensive models only for thinking and cheap implementers for
   typing: plan with Fable/Opus, gate the plan through an Opus plan-reviewer until APPROVE, split it
-  into self-contained briefs, dispatch each brief to a delegate-skills lane (backend=codex,
-  ui=agy, small=claude sonnet, fallback=copilot), review each diff with a Sonnet diff-reviewer,
-  land commits yourself, then run one final Opus audit. Use when the user says "orchestrate",
+  into self-contained briefs, dispatch each brief to a delegate-skills lane (complex=codex astra,
+  backend=codex, ui=agy, small=claude sonnet, fallback=claude sonnet), review each diff with a
+  Sonnet diff-reviewer, land commits yourself, then run one final Opus audit. Use when the user says "orchestrate",
   "plan and delegate", "big model plans, cheap model builds", or wants to save tokens on a
   multi-task feature. DO NOT USE for a one-file change you can make inline faster than writing a brief.
 license: MIT
@@ -19,8 +19,18 @@ metadata:
 You are the **orchestrator**. You think, gate, review and commit. You do **not** type implementation
 code when a lane fits — implementers do, in their own sessions, on their own quota.
 
-Token rule of thumb: Fable/Opus run ~3 times per feature (plan, plan-gate, final audit). Everything
-line-by-line runs on a cheaper model.
+Token rule of thumb: the big thinkers (Fable, Opus, GPT-6 Astra) run ~3–4 times per feature (plan,
+plan gate, optional second opinion, final audit). Everything line-by-line runs on a cheaper model.
+
+| Role | Model | Where |
+|---|---|---|
+| Plan | Fable 5.1 or Opus 5 | this session, or the `Plan` agent with `model: "fable"` |
+| Plan gate | Opus 5 | `plan-reviewer` subagent |
+| Second opinion (optional) | GPT-6 Astra | `plan-check` lane, read-only |
+| Large / complicated tasks | GPT-6 Astra | `complex` lane |
+| Normal tasks | Codex default, Gemini Flash, Sonnet | `backend`, `ui`, `small` lanes |
+| Diff review | Sonnet 5 | `diff-reviewer` subagent |
+| Final audit | Opus 5 | subagent with `model: "opus"` |
 
 ## Stage 1 — Plan (big model)
 
@@ -28,7 +38,7 @@ line-by-line runs on a cheaper model.
   `model: "fable"` (or `"opus"`) and give it the requirements plus relevant file paths.
 - Write the plan to a file (`docs/plans/<date>-<feature>.md` in the repo, or the plan-mode file).
 - The plan must list **tasks**, each small enough for one brief: goal, files to touch, acceptance
-  tests, lane (`backend` / `ui` / `small`), and dependencies between tasks.
+  tests, lane (`complex` / `backend` / `ui` / `small`), and dependencies between tasks.
 
 ## Stage 2 — Plan gate (Opus recheck, mandatory)
 
@@ -37,6 +47,12 @@ Dispatch the `plan-reviewer` subagent with the plan file path and the repo path.
 - `APPROVE` → continue.
 - Numbered fixes → revise the plan, re-dispatch. Loop until `APPROVE` (max 3 rounds; after that,
   show the remaining disagreements to the user and let them decide).
+
+**Optional second opinion (GPT-6 Astra)** — for large or risky features, after Opus approves, send the
+plan to the read-only `plan-check` lane (`codex-delegate --lane plan-check`) with the brief: "Review
+this plan for gaps, wrong assumptions about the code, and risky ordering. Reply APPROVE or a numbered
+list of fixes." A different model family catches different mistakes. If it raises real issues, fix
+the plan and send it back through `plan-reviewer`.
 
 Never dispatch implementation before `APPROVE`.
 
@@ -51,10 +67,12 @@ Load the matching delegate skill and run its relay with `--lane`:
 
 | Lane | Skill | Typical work |
 |---|---|---|
-| `backend` | `codex-delegate` | PHP/Laravel, actions, migrations, jobs, tests |
+| `complex` | `codex-delegate` (GPT-6 Astra, high) | large or tricky tasks: cross-cutting refactors, hard algorithms, concurrency |
+| `backend` | `codex-delegate` | server code, actions, migrations, jobs, tests |
 | `ui` | `agy-delegate` | React/TSX pages, components, styling |
-| `small` | `claude-delegate` | small fixes, lint/static-analysis fixes, text |
-| `fallback` | `copilot-delegate` | when a lane fails twice or hits a quota limit |
+| `small` | `claude-delegate` (Sonnet) | small fixes, lint/static-analysis fixes, text |
+| `fallback` | `claude-delegate` (Sonnet, high) | when a lane fails twice or hits a quota limit |
+| `copilot-review` | `copilot-delegate` (read-only) | optional third opinion on a plan or diff (writes need `--allow-all-tools`, full access — ask the human first) |
 
 ```bash
 node "<delegate-skill-dir>/scripts/relay.mjs" --lane backend --brief brief.md --cd "$REPO"
@@ -92,3 +110,9 @@ security. Fix findings through the `small` lane.
   no `npm update`, no migrations against real databases, no `git push`, no commits.
 - If the repo has no git history or safety net, say so in every brief and forbid wide-reaching commands.
 - Report outcomes faithfully: a lane that failed is reported as failed, with its `result.json` status.
+- Parallel tasks share one working tree: give each task its **own** test file as its gate and run
+  the full suite only after they have all landed.
+- `ui` lane failing with *write_file permission auto-denied* → Antigravity needs a scoped rule for
+  that folder: `~/orchestra-skills/scripts/agy-allow.sh <repo> --tests "<test cmd>"`. Never switch
+  to `--dangerously-skip-permissions` without the human's explicit yes.
+- A lane that reports a quota or rate limit (402/429) → send the task to `fallback` and tell the user.

@@ -1,6 +1,17 @@
 {
   "version": "delegate-fleet.v1",
   "lanes": {
+    "plan-check": {
+      "implementer": "codex",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "readOnly": true
+    },
+    "complex": {
+      "implementer": "codex",
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
     "backend": {
       "implementer": "codex",
       "effort": "medium"
@@ -15,7 +26,13 @@
       "effort": "medium"
     },
     "fallback": {
-      "implementer": "copilot"
+      "implementer": "claude",
+      "model": "sonnet",
+      "effort": "high"
+    },
+    "copilot-review": {
+      "implementer": "copilot",
+      "readOnly": true
     }
   }
 }

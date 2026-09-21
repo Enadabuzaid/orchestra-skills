@@ -8,9 +8,26 @@ mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/agents"
 ln -sfn "$ROOT/skills/orchestrate" "$CLAUDE_DIR/skills/orchestrate"
 for a in "$ROOT"/agents/*.md; do ln -sfn "$a" "$CLAUDE_DIR/agents/$(basename "$a")"; done
 
-# Append the orchestration rules to the global CLAUDE.md once.
-if ! grep -q "^## Orchestration (token budget)" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null; then
-  { [ -s "$CLAUDE_DIR/CLAUDE.md" ] && echo; cat "$ROOT/CLAUDE.snippet.md"; } >> "$CLAUDE_DIR/CLAUDE.md"
+# Put the orchestration rules in the global CLAUDE.md between markers (re-running replaces them).
+START="<!-- orchestra-skills:start -->"; END="<!-- orchestra-skills:end -->"
+touch "$CLAUDE_DIR/CLAUDE.md"
+node -e '
+  const fs = require("fs");
+  const [file, snippetFile, start, end] = process.argv.slice(1);
+  let md = fs.readFileSync(file, "utf8");
+  const block = `${start}\n${fs.readFileSync(snippetFile, "utf8").trim()}\n${end}`;
+  // Older installs appended the snippet without markers; drop that copy.
+  md = md.replace(/## Orchestration \(token budget\)[\s\S]*?(?=\n## |\n<!-- |$)/, "").trimEnd();
+  const re = new RegExp(`${start}[\\s\\S]*?${end}`);
+  md = re.test(md) ? md.replace(re, block) : (md ? md + "\n\n" : "") + block;
+  fs.writeFileSync(file, md + "\n");
+' "$CLAUDE_DIR/CLAUDE.md" "$ROOT/CLAUDE.snippet.md" "$START" "$END"
+
+# Default lane map, only if you don't have one yet (never overwrites).
+LANES="${XDG_CONFIG_HOME:-$HOME/.config}/delegate-skills/config.json"
+if [ ! -f "$LANES" ]; then
+  mkdir -p "$(dirname "$LANES")" && cp "$ROOT/examples/lanes.json" "$LANES"
+  echo "Wrote default lanes to $LANES"
 fi
 
 echo "Installed. Implementer skills come from delegate-skills:"

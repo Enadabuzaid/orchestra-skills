@@ -153,6 +153,30 @@ In your own project:
 
 ## Recorded results
 
+### v0.5.1 automated end-to-end (2026-09-21, after the fixes below)
+
+`scripts/e2e-test.sh` with `E2E_MODEL=sonnet` (the session only coordinates). Codex came back from
+its quota reset during the run; Copilot was out for the month; Kimi and DeepSeek not logged in.
+
+| Check | Result |
+|---|---|
+| 17 script checks | **17 ✓** after fixing the script's own last check (see below); the run itself: `E2E-RESULT: DONE`, 22/22 tests, 4 commits, clean tree |
+| Route | `feature`; 2 of 3 expensive calls (Fable plan, Opus audit) |
+| Builders | T1 backend → **Codex**; T2 frontend → Antigravity (headless command denied) → **Codex**; T3 docs → **Luna** |
+| Reviews | T1, T2: **Luna** (review + ui-review); T3: Haiku (Luna built it) |
+| Who paid | **6 of 9 relay runs on ChatGPT.** Claude lanes: $0.66 (the Fable plan $0.52 + two Haiku reviews $0.14). No Claude token spent on code |
+| Time | 70 min, of which ~16 min were Claude API retries before the planner's first token (`api_retry`, not quota: the 5-hour window was at 34%) |
+| Cost | Claude session $1.25 (Sonnet $0.84, Opus $0.34, Haiku $0.07) + lanes $0.66 = **$1.91**, vs **$4.95** for the v0.5 run of the same feature |
+
+What it found:
+
+| Finding | Fix |
+|---|---|
+| The script's last check ("some coding ran on a non-Claude quota") failed although 6 runs were on Codex: `cat … \| grep -q` under `pipefail` fails as soon as grep matches (cat gets SIGPIPE). It could only show once non-Claude runs existed | grep over the files directly (v0.5.1 follow-up) |
+| The lane-runner sent one review card that had failed `brief-check.sh` | lane-runner rule: a card that fails the check is never sent |
+| The T3 reviewer was Haiku while `orchestra resolve review --not-model luna` gives the free OpenCode model | lane-runner rule: use the model `resolve` printed, `--not-family` only for security-review |
+| Antigravity was denied a headless command again, even with `agy-allow.sh --tests node` | falls back as designed; see TROUBLESHOOTING for the allow rule |
+
 ### v0.5 automated end-to-end (2026-09-21, the run that shaped v0.5.1)
 
 `scripts/e2e-test.sh`, Claude orchestrating on Opus, with **Codex out of quota** for the whole run
@@ -174,6 +198,23 @@ What it found, and what changed because of it:
 | **Haiku as the `docs` builder** used 478k input tokens in 21 turns, then 174k more on the retry, for one README | Haiku is out of every builder chain; it only reviews and routes |
 | Every fallback landed on Sonnet: the default policy had no other affordable tier | GPT-5.6 Luna (ChatGPT) and OpenCode's free tier (`opencode/big-pickle`, smoke-tested) come before Sonnet in every chain; Copilot reviews read-only; `orchestra check` enforces the read-only rules |
 | `budget start` was run without `--dir`, so `metrics` found no relay runs | `metrics` now finds the run folder from the run id |
+
+### Tiny route through the skill (2026-09-21, v0.5.1 policy, Codex out of quota)
+
+A headless Sonnet session (`claude -p`, `/model sonnet`) on a copy of the demo app: *"the error
+message 'title is required' should become 'a title is required' (update the test too)"*.
+
+| | |
+|---|---|
+| Route | `tiny` (task-router: one task, two files, no risky areas) → no plan, no reviewer, no audit |
+| Card | 112 tokens, passed `brief-check.sh` |
+| Builder | `small` → **`opencode/big-pickle` (free tier)**: Codex/Luna out of quota, Kimi not installed, DeepSeek no key |
+| Relay | `completed` in ~40 s; touched only `todos.js` and `todos.test.js`; 3/3 tests |
+| Landed | one commit, clean tree, no trailer; the session re-ran the tests and read the diff itself before committing |
+| Metrics | expensive calls 0/3, fallbacks 0, retries 0 |
+| Cost / time | Claude session **$0.25, 11 turns**; typing **$0**; **83 s** prompt to finished report |
+
+Same $0.25 as the v0.5 tiny run, but the typing moved from Sonnet to a free model.
 
 ### Role smoke test (2026-09-21, v0.5.1 policy, Codex and Copilot out of quota)
 

@@ -34,12 +34,24 @@ fi
 
 printf '%s\n' "Orchestra policy"
 ORCH="$(cd "$(dirname "$0")" && pwd)/orchestra"
-if [ "$HAVE_NODE" -eq 1 ] && roles_out="$("$ORCH" roles 2>&1)"; then
-  none="$(printf '%s\n' "$roles_out" | grep -c "NONE AVAILABLE" || true)"
-  printf '%s\n' "$roles_out" | sed -n '3,$p' | sed 's/^/    /'
-  if [ "$none" -eq 0 ]; then pass "every role has an available model"; else fail "$none role(s) have no available model: install/log in a tool, or change the chain (orchestra set <role> …)"; fi
+if [ "$HAVE_NODE" -ne 1 ]; then
+  fail "cannot read the policy without Node 18+"
+elif ! check_out="$("$ORCH" check 2>&1)"; then
+  fail "policy invalid: $(printf '%s' "$check_out" | sed -n '2p' | sed 's/^ *✗ *//')"
+elif roles_out="$("$ORCH" roles --refresh 2>&1)"; then
+  pass "policy valid ($(printf '%s' "$check_out" | sed 's/^policy OK: //; s/ (.*//'))"
+  printf '%s\n' "$roles_out" | sed -n '2,$p' | sed '/^$/d' | sed 's/^/    /'
+  none_roles="$(printf '%s\n' "$roles_out" | awk '/NONE AVAILABLE/{print $1}')"
+  if [ -z "$none_roles" ]; then
+    pass "every role has an available model"
+  else
+    fail "role(s) with no available model: $(printf '%s' "$none_roles" | tr '\n' ' ')"
+    for r in $none_roles; do "$ORCH" resolve "$r" 2>&1 | sed 's/^/      /'; done
+    echo "      fix: install/log in a tool, or change the chain (orchestra set <role> <model> …)"
+  fi
+  if printf '%s\n' "$roles_out" | grep -q "^Discovery:"; then warn "$(printf '%s\n' "$roles_out" | grep '^Discovery:')"; fi
 else
-  fail "orchestra policy unreadable: $(printf '%s' "${roles_out:-}" | head -1)"
+  fail "orchestra roles failed: $(printf '%s' "${roles_out:-}" | head -1)"
 fi
 
 printf '%s\n' "delegate-skills"
@@ -147,6 +159,36 @@ JS
   fi
 fi
 
+# Per-project readiness: doctor.sh <project-path>. Nothing is installed in a project; this only checks
+# that orchestrate can run there (git, clean tree, the Antigravity write rule, a test command).
+PROJECT="${1:-}"
+if [ -n "$PROJECT" ]; then
+  printf '%s\n' "Project: $PROJECT"
+  if [ ! -d "$PROJECT" ]; then
+    fail "no such folder"
+  elif ! git -C "$PROJECT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "not a git repository: orchestrate commits task by task and needs history to undo (git init first)"
+  else
+    pass "git repository ($(git -C "$PROJECT" rev-parse --short HEAD 2>/dev/null || echo 'no commits yet'))"
+    if [ -z "$(git -C "$PROJECT" status --porcelain)" ]; then pass "clean working tree"; else warn "uncommitted changes: commit or stash before orchestrating, or they get mixed into task commits"; fi
+    tests=""
+    if [ -f "$PROJECT/artisan" ]; then tests="php artisan test"
+    elif [ -f "$PROJECT/package.json" ] && node -e 'process.exit(require(process.argv[1]).scripts?.test?0:1)' "$PROJECT/package.json" 2>/dev/null; then tests="npm test"
+    elif [ -f "$PROJECT/pytest.ini" ] || [ -f "$PROJECT/pyproject.toml" ]; then tests="pytest"
+    elif [ -f "$PROJECT/go.mod" ]; then tests="go test ./..."
+    elif [ -f "$PROJECT/Cargo.toml" ]; then tests="cargo test"; fi
+    [ -n "$tests" ] && pass "test command detected: $tests (plans use the repo's real commands under Verify)" || warn "no test command detected; the plan's Verify section must name one"
+    if [ "$HAVE_NODE" -eq 1 ] && "$ORCH" roles 2>/dev/null | awk '$0 ~ /antigravity/ && $0 !~ /NONE/ {f=1} END{exit f?0:1}'; then
+      proj_real="$(cd "$PROJECT" && pwd -P)"
+      if node -e 'const fs=require("fs"),p=process.env.HOME+"/.gemini/config/config.json";try{const a=JSON.parse(fs.readFileSync(p)).userSettings.globalPermissionGrants.allow||[];const t=process.argv[1];process.exit(a.some(r=>/^write_file\(/.test(r)&&(r.includes(`(${t})`)||t.startsWith(r.slice(11,-1)+"/")))?0:1)}catch{process.exit(1)}' "$proj_real" 2>/dev/null; then
+        pass "Antigravity may write here"
+      else
+        warn "Antigravity has no write rule for this folder: $(cd "$(dirname "$0")" && pwd)/agy-allow.sh $PROJECT${tests:+ --tests \"$tests\"}"
+      fi
+    fi
+  fi
+fi
+
 printf '\n%s\n' "$ok checks passed, $bad failed, $warnings warning(s)."
-[ "$bad" -eq 0 ] && echo "Next: scripts/smoke-test.sh"
+[ "$bad" -eq 0 ] && echo "Next: scripts/smoke-test.sh role:backend role:review   (a real task through the models the policy picks now)"
 exit "$bad"

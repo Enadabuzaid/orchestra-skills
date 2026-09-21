@@ -43,7 +43,7 @@ Verify:
 - `<command>` not run: needs a human — <why>
 
 Gaps (only if GAPS):
-1. <problem> — <evidence> — fix task: <one sentence> — lane: <complex|backend|ui|small>
+1. <problem> — <evidence> — fix task: <one sentence> — role: <backend|frontend|tests|refactor|debug|docs|small>
 ```
 
 Return `DONE` only when every checklist item is done and every runnable verify command passes.

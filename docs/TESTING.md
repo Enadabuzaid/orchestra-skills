@@ -6,45 +6,66 @@ work on a real feature.
 
 | Step | What | Time | Uses quota? |
 |---|---|---|---|
-| 1 | Doctor: everything installed and wired | seconds | no |
-| 2 | Lane smoke test: every CLI really codes | 1–2 min | a little |
-| 3 | Automated end-to-end: the whole workflow, checked by a script | 10–25 min | yes (Opus + lanes) |
+| 0 | Self-test: the scripts and the policy engine, with fake tools | 30 s | no |
+| 1 | Doctor: everything installed and wired, which model each role uses now | seconds | no |
+| 2 | Role smoke test: the model each role picks really codes | 1–2 min | a little |
+| 3 | Automated end-to-end: the whole workflow, checked by a script | 10–25 min | yes (Fable + Opus + builders) |
 | 4 | Watch it yourself on the demo app | 10–20 min | yes |
 | 5 | Check the token savings | 1 min | no |
 | 6 | First real feature in your own project | – | yes |
 
 ---
 
+## Step 0. Self-test (also what CI runs)
+
+```bash
+~/orchestra-skills/scripts/self-test.sh
+```
+
+**You should see:** `All 10 zero-quota checks passed.`
+
+**It proves:** every script parses on bash 3.2 (macOS) and bash 5; the installer backs up conflicts
+and is idempotent and links `~/orchestra-skills` from any clone location; the doctor accepts a valid
+setup and rejects a broken one; the smoke test rejects out-of-scope writes; task/delta/review cards
+are validated; and the policy engine, with fake CLIs, resolves roles by availability, quota and
+relay flags, keeps builder ≠ reviewer, refuses the 4th expensive call, validates policies
+(`orchestra check`), and never caches a failed discovery.
+
 ## Step 1. Doctor
 
 ```bash
-~/orchestra-skills/scripts/doctor.sh
+~/orchestra-skills/scripts/doctor.sh                 # the machine
+~/orchestra-skills/scripts/doctor.sh ~/Code/my-app   # plus one project
 ```
 
-**You should see:** a ✓ on every line, the lane table, and `N checks passed, 0 failed.`
+**You should see:** a ✓ on every line, the role table with the model each role **uses now**, and
+`N checks passed, 0 failed.` With a project path: git repository, clean tree, the detected test
+command, and whether Antigravity may write there.
 
-**It proves:** the `orchestrate` skill, all three agents (`plan-reviewer`, `diff-reviewer`,
-`completion-auditor`), the CLAUDE.md rules, the delegate-skills and your lane config are all in
-place, and which CLIs are logged in.
+**It proves:** the `orchestrate` skill, the five agents (`task-router`, `lane-runner`,
+`plan-reviewer`, `diff-reviewer`, `completion-auditor`), the CLAUDE.md rules, the relays, the policy
+(validated by `orchestra check`) and the logins are all in place, and the project is ready.
 
-**If it fails:** each ✗ line says the fix (usually `./install.sh`, or a login).
+**If it fails:** each ✗ line says the fix. A role with `NONE AVAILABLE` is followed by the reason for
+every model in its chain and the `orchestra set` command to change it.
 
-## Step 2. Lane smoke test
+## Step 2. Role smoke test
 
 ```bash
-~/orchestra-skills/scripts/smoke-test.sh              # all lanes
-~/orchestra-skills/scripts/smoke-test.sh backend ui   # just some
+~/orchestra-skills/scripts/smoke-test.sh role:backend role:frontend role:review role:docs   # roles, through the policy
+~/orchestra-skills/scripts/smoke-test.sh backend ui                                          # older: lanes from the lane config
 ```
 
-**You should see:** one row per lane, with `PASS  multiply added, tests green, not committed` for
-write lanes and `PASS  answered, no changes` for read-only lanes.
+**You should see:** one row per role, with `PASS  multiply added, tests green, scope clean, not
+committed` for building roles and `PASS  answered, no changes` for read-only roles.
 
-**It proves:** each CLI (Codex, GPT-6 Astra, Antigravity, Sonnet, Copilot) really receives a brief,
-writes working code, **never commits**, and read-only lanes never change files. The script checks the
-files and tests itself; it doesn't trust what the CLI says.
+**It proves:** the model each role resolves to right now really receives a card, writes working code,
+**never commits**, and read-only roles never change files. The script checks the files and tests
+itself; it doesn't trust what the CLI says.
 
 **If it fails:** the row gives the reason, and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) has the fix.
-A quota failure means that provider is out of quota; your setup is fine.
+A quota failure means that provider is out of quota; your setup is fine. Mark it so nothing tries it
+again until it resets: `orchestra exhausted <tool> --until HH:MM` (or `--for 240h` for a monthly quota).
 
 ## Step 3. Automated end-to-end test
 
@@ -53,9 +74,10 @@ A quota failure means that provider is out of quota; your setup is fine.
 ~/orchestra-skills/scripts/e2e-test.sh --no-ui  # if you don't use Antigravity
 ```
 
-A fresh, unattended Claude Code session (Opus) builds a 3-task feature on the demo app with
-`orchestrate`. It has to go through the Opus plan gate, the lanes, the Sonnet reviews and the Opus
-completion loop. Then **the script checks the result itself**:
+A fresh, unattended Claude Code session builds a 3-task feature on the demo app with `orchestrate`.
+It has to route, get the Fable plan, build through the lane-runner with the models the policy picks,
+review each task with a different model, and pass the Opus completion loop. Then **the script
+checks the result itself**:
 
 | Check | Proves |
 |---|---|
@@ -130,6 +152,40 @@ In your own project:
 ---
 
 ## Recorded results
+
+### v0.5 automated end-to-end (2026-09-21, the run that shaped v0.5.1)
+
+`scripts/e2e-test.sh`, Claude orchestrating on Opus, with **Codex out of quota** for the whole run
+and Copilot's monthly premium quota used up.
+
+| Check | Result |
+|---|---|
+| 17 script checks | **16 ✓**, `E2E-RESULT: DONE`. The one ✗: "some coding ran on a non-Claude quota", because every non-Claude builder was unavailable |
+| Route | `feature`; no second opinion (no architecture/security/payments/migrations areas); **2 of 3 expensive calls** used (Fable plan, Opus audit) |
+| Fallbacks | backend: Codex (quota) → Sonnet. frontend: Antigravity (headless command permission denied) → Sonnet. Both recorded in `orchestra metrics` |
+| Time | 171 min, of which about 150 were a network outage (`ENOTFOUND` on a review) and two interrupted lane-runner turns, not model work |
+| Cost | Claude orchestrator + subagents $3.69 (Opus $2.03, Sonnet $1.61, Haiku $0.05); relay runs $1.26 |
+
+What it found, and what changed because of it:
+
+| Finding | Fix (v0.5.1) |
+|---|---|
+| The policy engine reported **every CLI as "not installed"** for 15 minutes: a discovery probe failed and its empty result was cached | A failed or empty discovery is never cached; the last good result, then a PATH check, is used. `doctor.sh` always re-probes and prints the reason per model |
+| **Haiku as the `docs` builder** used 478k input tokens in 21 turns, then 174k more on the retry, for one README | Haiku is out of every builder chain; it only reviews and routes |
+| Every fallback landed on Sonnet: the default policy had no other affordable tier | GPT-5.6 Luna (ChatGPT) and OpenCode's free tier (`opencode/big-pickle`, smoke-tested) come before Sonnet in every chain; Copilot reviews read-only; `orchestra check` enforces the read-only rules |
+| `budget start` was run without `--dir`, so `metrics` found no relay runs | `metrics` now finds the run folder from the run id |
+
+### Role smoke test (2026-09-21, v0.5.1 policy, Codex and Copilot out of quota)
+
+| Role | Resolved to | Result |
+|---|---|---|
+| planner-light | claude sonnet (read-only) | PASS, answered, no changes (8 s) |
+| frontend | agy gemini-3.8-flash-high | PASS (25 s) |
+| docs | agy gemini-3.8-flash-high | PASS (36 s) |
+| backend | claude sonnet | PASS (19 s) |
+| review | copilot (read-only) | FAIL: 402 `quota_exceeded` (monthly premium quota). Reported as quota, setup fine; marked `orchestra exhausted copilot --for 240h` |
+| opencode `opencode/big-pickle` (free) | opencode | PASS (25 s) |
+| opencode `opencode/nemotron-3-ultra-free` (free) | opencode | PASS (48 s) |
 
 ### Run 1: guided end-to-end (2026-09-21)
 

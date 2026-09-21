@@ -11,7 +11,7 @@ license: MIT
 metadata:
   author: Enad Abuzaid
   homepage: https://github.com/Enadabuzaid/orchestra-skills
-  version: 0.5.0
+  version: 0.5.1
   requires: amElnagdy/delegate-skills relays, a clone of orchestra-skills at ~/orchestra-skills
 ---
 

@@ -3,6 +3,47 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
+## [0.5.1] - 2026-09-21 — Every subscription, no poisoned cache
+
+Driven by the first unattended v0.5 end-to-end run (16/17 checks, `DONE`, but 171 minutes and every
+builder on Claude). Details in `docs/TESTING.md`.
+
+### Fixed
+- **A failed CLI discovery made every role `NONE AVAILABLE` for 15 minutes.** The empty result was
+  cached. Now a failed or empty probe is never cached: the last good result is kept, and without one
+  a PATH check is used. `orchestra roles` says when it's running on stale or fallback data;
+  `orchestra resolve` hints at `--refresh`; `doctor.sh` always re-probes and prints why each model
+  in an unavailable chain was skipped.
+- **Read-only roles could land on a relay that can't enforce read-only** (Kimi's has no
+  `--read-only`), and flags a relay doesn't accept (`--effort` for Kimi) were passed. The engine now
+  reads each relay's accepted flags and skips or omits accordingly.
+- `orchestra undo` had nothing to restore after the first `orchestra set` on a fresh machine.
+- `orchestra metrics <run>` finds the relay runs from the run id when `budget start` had no `--dir`.
+- `completion-auditor` names roles (`backend|frontend|tests|…`), not the pre-v0.5 lane names.
+
+### Added
+- **`orchestra check`**: validates a policy (models exist; read-only roles only use relays with
+  `--read-only`; writing roles never use a read-only-only tool such as Copilot; routing refers to
+  existing roles). Run by `doctor.sh` and the self-test.
+- **Copilot** as a read-only reviewer (`review`, `ui-review`, `security-review`, `planner-light`
+  fallbacks), and the **free OpenCode tier** (`opencode-free` = `opencode/big-pickle`, smoke-tested)
+  as the last stop before Sonnet in every builder chain, so typing stays off paid quotas when
+  Codex, Antigravity, Kimi and DeepSeek are all out. GPT-5.6 Luna also precedes Sonnet everywhere.
+- `doctor.sh <project>`: per-project readiness (git, clean tree, detected test command, Antigravity
+  write rule) so orchestrate can be used in any project after one install.
+- `install.sh` links `~/orchestra-skills` to the checkout when it lives elsewhere, always installs the
+  `orchestra` command in `~/.local/bin`, and lists the Kimi and OpenCode relays.
+- Self-test: discovery failure handling, relay-flag awareness, `orchestra check`, `undo`, the
+  installer's `~/orchestra-skills` link, `metrics` without `--dir`.
+
+### Changed
+- **Haiku no longer builds.** As the `docs` builder it looped for 650k tokens on a README in the
+  recorded run. It stays in read-only chains (reviews) and routes.
+- Kimi is out of the `review` chain (no read-only mode); it still builds.
+- Docs use the v0.5 vocabulary throughout (tiny / small / feature / complex, roles not lanes);
+  README, QUICKSTART, POLICY, ARCHITECTURE, TESTING and TROUBLESHOOTING updated; CLAUDE.md and
+  AGENTS.md snippets no longer mention the pre-v0.5 route names.
+
 ## [0.5.0] - 2026-09-21 — Token Intelligence
 
 ### Added

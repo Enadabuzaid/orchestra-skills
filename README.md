@@ -1,23 +1,22 @@
 # orchestra-skills
 
-**An AI engineering router: it decides how much intelligence, context and money a coding task deserves.** A Claude Code workflow that uses Fable, Opus and GPT-6
-Astra only for planning and checking, and sends the actual coding to cheaper CLIs: Codex,
-Antigravity (Gemini), Claude Sonnet and Copilot. Every plan is checked by Opus before any code is
-written.
+**An AI engineering router: it decides how much intelligence, context and money a coding task
+deserves.** Thinking (planning, the second opinion, the final audit) goes to the strongest models,
+Claude Fable, Claude Opus and GPT-6 Astra, and is budgeted. Typing (code, tests, docs, reviews) goes
+to the cheapest model that is available right now across every subscription you have: Codex and
+GPT-5.6 Luna on ChatGPT, Antigravity (Gemini) on Google, Kimi, DeepSeek, OpenCode's free tier,
+Copilot for read-only reviews, and Claude Sonnet last. Works in any project after one install.
 
 ```
-You ─▶ Claude Opus/Fable plans ─▶ Opus plan-reviewer: APPROVE? ─▶ short briefs
-                                                                     │
-          ┌──────────────────┬──────────────────┬───────────────────┘
-          ▼                  ▼                  ▼
-   Codex / GPT-6 Astra   Antigravity       Claude Sonnet
-   (backend, complex)    (ui)              (small, fallback)
-          └──────────────────┴────────┬─────────┘
-                                      ▼
-                   Sonnet diff-reviewer ─▶ Claude runs tests + commits
-                                      ▼
-            Opus completion-auditor: every plan item done? verify commands pass?
-                 DONE ─▶ report to you        GAPS ─▶ fix tasks ─▶ lanes ─▶ audit again
+You ─▶ task-router (Haiku): tiny | small | feature | complex
+          │
+          ├─ tiny ──────▶ one card ─▶ cheapest builder ─▶ test ─▶ commit           (0 expensive calls)
+          ├─ small ─────▶ light plan (Sonnet) ─▶ builders ─▶ review ─▶ Verify       (0 expensive calls)
+          ├─ feature ───▶ Fable plans ─▶ lane-runner (Sonnet) ─▶ Opus final audit   (2 expensive calls)
+          └─ complex ───▶ Fable/Opus plan ─▶ Astra second opinion ─▶ … ─▶ Opus audit (≤3 expensive calls)
+
+   lane-runner, per task:  card ─▶ orchestra resolve <role> ─▶ builder ─▶ gate ─▶ review by a
+                           different model ─▶ delta retry if needed ─▶ one commit
 ```
 
 ## Why: the token model
@@ -29,109 +28,126 @@ Most tokens in a coding session go to **typing** (reading files, writing code, r
 |---|---|---|
 | **Route before anything expensive** | a Haiku router classifies tiny / small / feature / complex; each level gets only its process | "change one error message": route → card → Sonnet → test → commit, **0 expensive calls, $0.25, 91s** |
 | **Minimum sufficient context** | builders and reviewers get one short card, never the conversation; retries send only the failing check | cards are 100–250 words; `brief-check.sh` rejects leaks |
-| **ROLE → MODEL with fallbacks** | "I need a backend builder" → Codex → Kimi → DeepSeek → Sonnet, by live availability and quota | Codex out of quota → backend fell back to Sonnet automatically |
+| **ROLE → MODEL with fallbacks** | "I need a backend builder" → Codex → Kimi → DeepSeek → Luna → OpenCode free → Sonnet, by live availability and quota | Codex out of quota → backend fell back automatically, twice, in the recorded runs |
 | **A budget of expensive calls** | a normal feature = Fable once + Opus once; a complex one adds one second opinion | `orchestra budget spend` refuses the 4th expensive call |
 | **Planner ≠ Builder ≠ Reviewer** | independent review by another model; second opinions from another family | Astra found a real date bug in a Fable plan before any code |
-| **Other subscriptions do the typing** | Codex on ChatGPT, Antigravity on Google, Kimi/DeepSeek on theirs | a 113k-token backend task cost 0 Claude tokens |
+| **Other subscriptions do the typing** | Codex on ChatGPT, Antigravity on Google, Kimi/DeepSeek on theirs, OpenCode's free tier at $0 | a 113k-token backend task cost 0 Claude tokens |
+| **Never stuck on one quota** | a tool that hits its limit is marked exhausted (`orchestra exhausted codex --until 21:34`) and every role skips it until then | the v0.5 end-to-end run finished with Codex and Copilot both out of quota |
 
 Full results, including the failures found along the way: [docs/TESTING.md](docs/TESTING.md).
 
-## Who does what
+## Who does what (default policy)
 
-| Job | Model | Lane / agent |
+Every job is a **role** with an ordered chain; the first model that is installed, logged in, offered
+by its CLI and not out of quota does the job. See it live with `orchestra roles`.
+
+| | Role | Chain (primary → fallbacks) |
 |---|---|---|
-| Plan | Claude Fable 5.1 / Opus 5 | your session |
-| Check the plan (mandatory) | Claude Opus 5 | `plan-reviewer` agent |
-| Second opinion (optional) | GPT-6 Astra | `plan-check` lane (read-only) |
-| Large / tricky tasks | GPT-6 Astra | `complex` lane |
-| Backend tasks | Codex default | `backend` lane |
-| UI tasks | Gemini 3.8 Flash (Antigravity) | `ui` lane |
-| Small fixes and docs | Claude Sonnet 5 | `small` lane |
-| When a lane fails or hits quota | Claude Sonnet 5 (high) | `fallback` lane |
-| Run the approved plan: briefs, lanes, reviews, commits | Claude Sonnet 5 | `lane-runner` agent |
-| Decide when it's finished (loops until DONE) | Claude Opus 5 | `completion-auditor` agent |
+| **Thinking** | `planner` (feature) | Fable → Astra → Opus |
+| | `planner-hard` (complex + Hard) | Opus → Fable → Astra |
+| | `planner-light` (small) | Sonnet → Luna → Copilot → Haiku |
+| | `architecture` (second opinion, other family) | Astra → Opus |
+| | `final-audit` | Opus |
+| **Typing** | `backend` | Codex → Kimi → DeepSeek → Luna → OpenCode free → Sonnet |
+| | `frontend` | Antigravity → Codex → Kimi → Luna → OpenCode free → Sonnet |
+| | `tests` | Kimi → DeepSeek → Luna → Antigravity → OpenCode free → Sonnet |
+| | `refactor` | Kimi → Codex → Luna → OpenCode free → Sonnet |
+| | `debug` | Codex → Luna → OpenCode free → Sonnet |
+| | `docs`, `small` | DeepSeek → … → OpenCode free → Sonnet |
+| **Checking** (read-only) | `review` (every task) | DeepSeek → Luna → OpenCode free → Copilot → Haiku → Sonnet |
+| | `ui-review` (frontend tasks) | Codex → Luna → Copilot → Sonnet |
+| | `security-review` (sensitive tasks) | Astra → Copilot → Sonnet |
 
-## Install (5 minutes)
+Haiku never builds (in the recorded run it looped for 650k tokens on a README); Copilot only reviews
+(headless writes need `--allow-all-tools`); Kimi builds but never reviews (its relay has no
+read-only mode). `orchestra check` enforces these rules on any policy you edit.
+
+## Install (5 minutes, once per machine)
 
 ```bash
-# 1. The implementer skills (by amElnagdy — we build on them, not fork them)
+# 1. The implementer relays (by amElnagdy — we build on them, not fork them). Install the ones for
+#    the CLIs you have; the policy skips the rest.
 npx skills add amElnagdy/delegate-skills --global --agent claude-code -y \
-  --skill codex-delegate --skill agy-delegate --skill claude-delegate \
-  --skill copilot-delegate --skill delegate-setup
+  --skill delegate-setup --skill claude-delegate --skill codex-delegate --skill agy-delegate \
+  --skill copilot-delegate --skill kimi-delegate --skill opencode-delegate
 
-# 2. This repo
+# 2. This repo (any folder works; the installer links ~/orchestra-skills to it)
 git clone https://github.com/Enadabuzaid/orchestra-skills ~/orchestra-skills
 ~/orchestra-skills/install.sh
 
-# 3. Let Antigravity write in your projects folder (only if you use the ui lane)
-~/orchestra-skills/scripts/agy-allow.sh ~/Code
-
-# 4. Check everything, then restart Claude Code
+# 3. Check the machine, then restart Claude Code
 ~/orchestra-skills/scripts/doctor.sh
-~/orchestra-skills/scripts/smoke-test.sh
 ```
 
-Log in to each CLI once first (`codex login`, run `agy` once, `gh auth login`). You don't need every
-CLI: move a lane to a CLI you have (see the [guide](docs/GUIDE.md#9-changing-lanes-and-models)).
+Log in to each CLI once (`codex login`, run `agy` once, `copilot login`, `kimi`, `opencode auth login`).
+You don't need every CLI: a role whose whole chain is unavailable shows `NONE AVAILABLE` in the
+doctor, with the reason for each model and the `orchestra set` command to change it.
 
-## Use
+## Use it in any project
 
-New here? Read **[docs/QUICKSTART.md](docs/QUICKSTART.md)**. In Claude Code, inside your project, on
-Opus (or Fable for hard features):
+Nothing is installed inside a project. Once per project:
+
+```bash
+cd ~/Code/my-project
+~/orchestra-skills/scripts/doctor.sh .                                  # git? clean tree? test command? Antigravity allowed?
+~/orchestra-skills/scripts/agy-allow.sh . --tests "npm test"            # only if the doctor asks for it
+```
+
+Then in Claude Code, inside the project, on Sonnet (the session only coordinates):
 
 > Use orchestrate to add CSV export to the reports page.
 
-Claude plans, gets `APPROVE` from Opus, sends tasks to the lanes, has each diff reviewed, re-runs the
-tests and commits task by task. Then Opus checks every plan item and runs the verify commands,
-sending any gaps back to the implementers until everything is `DONE`, and Claude reports what was
-built and how it was verified. You review `git log` and push.
+The router picks the level, the planner writes `docs/plans/<date>-<feature>.md`, the lane-runner
+builds task by task with one commit each, and the Opus auditor decides `DONE`. You read `git log` and
+push. New here? Read **[docs/QUICKSTART.md](docs/QUICKSTART.md)**.
 
 ## Tested
 
-- `scripts/smoke-test.sh` sends a real coding task to every lane and checks the result itself
-  (code added, tests green, no commits).
-- A full end-to-end run on `examples/demo-app` (3 tasks, 3 different implementers) is written up
-  in [docs/TESTING.md](docs/TESTING.md#reference-run-2026-09-21). The Opus gate rejected the first
-  plan with 5 real problems before any code was written.
+- `scripts/self-test.sh`: 10 zero-quota checks (installer, doctor, cards, the policy engine with
+  fake tools, discovery failure handling, budget), run by CI on macOS and Linux.
+- `scripts/smoke-test.sh role:backend role:review …`: a real coding task through the model each role
+  resolves to right now; the script checks the files, the tests and that nothing was committed.
+- `scripts/e2e-test.sh`: a fresh, unattended Claude Code session builds a 3-task feature on the demo
+  app with `orchestrate`; the script checks the result itself (17 checks). Recorded runs, with what
+  each one found, are in [docs/TESTING.md](docs/TESTING.md#recorded-results).
 
 ## Docs
 
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. Install once, then use it in any project
 - **[docs/POLICY.md](docs/POLICY.md)**: the Orchestra policy: routing levels, ROLE → MODEL with fallbacks, token budget, compact cards, run metrics
-- **[docs/ROADMAP.md](docs/ROADMAP.md)**: v0.5 Token Intelligence → v0.6 More models → v0.7 Smart context
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: the design in one page: router → planner lane → different-AI review → job lanes with task cards → final audit
-- **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. "I opened Claude Code, what now?" in one page
-- **[docs/CODEX.md](docs/CODEX.md)**: run everything from the **Codex app** (Astra plans, Claude Fable/Opus check, lanes build)
-- **[docs/LANES.md](docs/LANES.md)**: change who does what (backend, ui, checkers, "Codex hit its limit"), one command each
-- **[docs/EXAMPLE.md](docs/EXAMPLE.md)**: a real example ("make sure patient login and register work"): where to type, what you'll see at each step, and who pays
-- **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide, from install and first feature to lanes,
-  models, permissions and token savings
-- [docs/TESTING.md](docs/TESTING.md): **test it yourself, step by step** (doctor → lane smoke test → automated end-to-end → watch it live → token check), with recorded results
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: the design in one page
+- **[docs/TESTING.md](docs/TESTING.md)**: test it yourself, step by step, with recorded results
+- **[docs/CODEX.md](docs/CODEX.md)**: run everything from the Codex app instead of Claude Code
+- **[docs/EXAMPLE.md](docs/EXAMPLE.md)**: a real example on a Laravel app: where to type, what you'll see, who pays
+- **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide (some sections still use the older lane vocabulary)
+- [docs/LANES.md](docs/LANES.md): the older per-lane config, still used for running single relays by hand
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): common failures and fixes
+- [docs/ROADMAP.md](docs/ROADMAP.md): what's next
 
 ## What's in the repo
 
 | Path | Purpose |
 |---|---|
+| `skills/orchestrate/` | The workflow skill for Claude Code, plus the policy, card and plan references |
 | `skills/orchestrate-portable/` | The same workflow for the Codex app and other tools without Claude subagents |
-| `skills/orchestrate/` | The 8-stage workflow skill plus the plan and brief templates |
-| `agents/plan-reviewer.md` | Opus plan gate: `APPROVE` or numbered fixes |
+| `agents/task-router.md` | Haiku router: tiny / small / feature / complex |
+| `agents/lane-runner.md` | Sonnet build coordinator: cards → builders → gates → reviews → commits |
+| `agents/plan-reviewer.md` | Opus plan gate (fallback second opinion): `APPROVE` or numbered fixes |
 | `agents/diff-reviewer.md` | Sonnet per-task reviewer: `PASS` / `FAIL` |
 | `agents/completion-auditor.md` | Opus completion gate: `DONE` / `GAPS` |
-| `agents/lane-runner.md` | Sonnet runner for the approved plan (briefs → lanes → review → commit) |
-| `CLAUDE.snippet.md` | Rules added to `~/.claude/CLAUDE.md` |
-| `examples/lanes.json` | The default lane map |
-| `examples/demo-app/` | A tiny app for the end-to-end test |
-| `install.sh` | Links everything into `~/.claude` (safe to re-run) |
-| `scripts/orchestra` | The policy engine: `roles`, `resolve`, `set`, `route`, `budget`, `exhausted`, `metrics`, `edit`, `undo` |
 | `examples/orchestra.json` | The default policy (models, roles with fallbacks, routing, budget) |
-| `scripts/lanes.sh` | Older per-lane config for running single relays by hand |
+| `scripts/orchestra` | The policy engine: `roles`, `resolve`, `set`, `check`, `route`, `budget`, `exhausted`, `metrics`, `edit`, `undo` |
 | `scripts/brief-check.sh` | Rejects task cards that are incomplete, too long, or leak context |
-| `agents/task-router.md` | Haiku router: simple / medium / complex / very-complex |
-| `scripts/doctor.sh` | Checks the setup (changes nothing) |
-| `scripts/smoke-test.sh` | Real test of every lane |
-| `scripts/agy-allow.sh` | Scoped Antigravity write permission for a folder |
-| `scripts/token-report.sh` | Tokens per delegated run, and which quota paid |
+| `scripts/doctor.sh` | Checks the machine, and with a path, the project (changes nothing) |
+| `scripts/smoke-test.sh` | A real task through any role or lane |
 | `scripts/e2e-test.sh` | Unattended full-workflow test on the demo app, checked by the script |
+| `scripts/self-test.sh` | Zero-quota checks (CI) |
+| `scripts/token-report.sh` | Tokens per delegated run, and which quota paid |
+| `scripts/agy-allow.sh` | Scoped Antigravity write permission for a folder |
+| `scripts/lanes.sh`, `examples/lanes*.json` | Older per-lane config for running single relays by hand |
+| `CLAUDE.snippet.md`, `CODEX.snippet.md` | Rules added to `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` |
+| `examples/demo-app/` | A tiny app for the end-to-end test |
+| `install.sh` | Links everything into `~/.claude`, `~/.codex` and `~/.local/bin` (safe to re-run) |
 
 ## Author
 

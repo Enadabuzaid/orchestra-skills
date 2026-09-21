@@ -1,5 +1,6 @@
 {
   "version": "orchestra.v1",
+  "_comment": "Thinking on Fable / Opus / Astra (expensive, budgeted). Typing on the cheapest available model, in this order of preference: other subscriptions first (Codex/Luna on ChatGPT, Antigravity on Google, Kimi, DeepSeek), then Claude Sonnet. Haiku only reads (reviews, routing): as a builder it looped for 650k tokens on a README in the recorded e2e run. Copilot writes headless only with --allow-all-tools, so it is read-only (read_only_tool) and orchestra check refuses it in a writing role. Kimi's relay has no --read-only, so Kimi builds but never reviews. opencode-free is OpenCode Zen's free tier (opencode/big-pickle; passed the smoke test): the last stop before Sonnet, so typing stays off every paid quota when the others are out. Its model ids change; a model the CLI no longer offers is skipped automatically.",
   "models": {
     "fable": {
       "tool": "claude",
@@ -48,6 +49,14 @@
     "deepseek": {
       "tool": "opencode",
       "model": "deepseek/deepseek-chat"
+    },
+    "copilot": {
+      "tool": "copilot",
+      "read_only_tool": true
+    },
+    "opencode-free": {
+      "tool": "opencode",
+      "model": "opencode/big-pickle"
     }
   },
   "roles": {
@@ -55,6 +64,7 @@
       "primary": "sonnet",
       "fallback": [
         "luna",
+        "copilot",
         "haiku"
       ],
       "read_only": true
@@ -88,6 +98,8 @@
       "fallback": [
         "kimi",
         "deepseek",
+        "luna",
+        "opencode-free",
         "sonnet"
       ]
     },
@@ -96,6 +108,8 @@
       "fallback": [
         "codex",
         "kimi",
+        "luna",
+        "opencode-free",
         "sonnet"
       ]
     },
@@ -104,6 +118,8 @@
       "fallback": [
         "deepseek",
         "luna",
+        "antigravity",
+        "opencode-free",
         "sonnet"
       ]
     },
@@ -111,19 +127,25 @@
       "primary": "kimi",
       "fallback": [
         "codex",
+        "luna",
+        "opencode-free",
         "sonnet"
       ]
     },
     "debug": {
       "primary": "codex",
       "fallback": [
+        "luna",
+        "opencode-free",
         "sonnet"
       ]
     },
     "docs": {
       "primary": "deepseek",
       "fallback": [
-        "haiku",
+        "luna",
+        "antigravity",
+        "opencode-free",
         "sonnet"
       ]
     },
@@ -131,15 +153,18 @@
       "primary": "deepseek",
       "fallback": [
         "kimi",
+        "luna",
         "codex",
+        "opencode-free",
         "sonnet"
       ]
     },
     "review": {
-      "primary": "kimi",
+      "primary": "deepseek",
       "fallback": [
-        "deepseek",
         "luna",
+        "opencode-free",
+        "copilot",
         "haiku",
         "sonnet"
       ],
@@ -150,6 +175,7 @@
       "primary": "codex",
       "fallback": [
         "luna",
+        "copilot",
         "sonnet"
       ],
       "read_only": true,
@@ -158,6 +184,7 @@
     "security-review": {
       "primary": "astra",
       "fallback": [
+        "copilot",
         "sonnet"
       ],
       "read_only": true,

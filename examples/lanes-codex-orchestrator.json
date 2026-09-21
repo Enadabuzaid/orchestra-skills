@@ -1,6 +1,12 @@
 {
   "version": "delegate-fleet.v1",
   "lanes": {
+    "planner-light": {
+      "implementer": "claude",
+      "model": "sonnet",
+      "effort": "medium",
+      "readOnly": true
+    },
     "planner": {
       "implementer": "claude",
       "model": "fable",

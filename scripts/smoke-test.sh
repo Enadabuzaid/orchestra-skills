@@ -3,6 +3,7 @@
 #
 #   scripts/smoke-test.sh                 # all lanes in your lane config
 #   scripts/smoke-test.sh backend small   # only these lanes
+#   scripts/smoke-test.sh role:backend role:review   # roles from the Orchestra policy (the model it picks now)
 #
 # Each lane gets its own temp repo with math.js + a node:test file.
 #  - write lanes must add multiply(), keep `node --test` green, touch no other file, and NOT commit.
@@ -49,8 +50,17 @@ EOF
 
 run_lane() {
   local lane="$1" impl ro dir out brief result status verdict=FAIL reason="" ro_violation="" unexpected=""
-  impl="$(lane_field "$lane" implementer)"
-  ro="$(lane_field "$lane" readOnly)"
+  local role_flags=""
+  if [ "${lane#role:}" != "$lane" ]; then
+    # Orchestra role: resolve to the model the policy would use right now.
+    local rj; rj="$("$(dirname "$0")/orchestra" resolve "${lane#role:}" --json 2>/dev/null)" || { echo "$lane|?|FAIL|no available model for this role" > "$WORK/$lane.row"; return; }
+    impl="$(printf '%s' "$rj" | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0)).tool)')"
+    role_flags="$(printf '%s' "$rj" | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0)).flags.join(" "))')"
+    case " $role_flags " in *" --read-only "*) ro=true ;; *) ro="" ;; esac
+  else
+    impl="$(lane_field "$lane" implementer)"
+    ro="$(lane_field "$lane" readOnly)"
+  fi
   dir="$WORK/$lane"; out="$WORK/$lane.out"; brief="$WORK/$lane.brief.md"
   local relay="$SKILLS_DIR/$impl-delegate/scripts/relay.mjs"
 
@@ -85,7 +95,8 @@ EOF
   local start=$SECONDS
   # Claude lanes use your claude.ai subscription, not an API key (set ORCHESTRA_USE_API_KEY=1 to keep it).
   local unset_key=(); [ "$impl" = "claude" ] && [ -z "${ORCHESTRA_USE_API_KEY:-}" ] && unset_key=(-u ANTHROPIC_API_KEY)
-  env ${unset_key[@]+"${unset_key[@]}"} node "$relay" --lane "$lane" --brief "$brief" --cd "$dir" --timeout "$TIMEOUT" --out-dir "$WORK/$lane.run" >"$out" 2>&1
+  local sel=(--lane "$lane"); [ -n "$role_flags" ] && sel=($role_flags)
+  env ${unset_key[@]+"${unset_key[@]}"} node "$relay" "${sel[@]}" --brief "$brief" --cd "$dir" --timeout "$TIMEOUT" --out-dir "$WORK/$lane.run" >"$out" 2>&1
   local secs=$((SECONDS - start))
   result="$WORK/$lane.run/result.json"
   status="$(node -e 'try{process.stdout.write(require(process.argv[1]).status||"")}catch{process.stdout.write("no-result")}' "$result")"

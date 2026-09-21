@@ -44,61 +44,17 @@
                                report to you
 ```
 
-## The three ideas
+## The ideas (v0.5 Token Intelligence)
 
-### 1. Context isolation (the biggest saver)
-
-An implementer never sees the conversation, the architecture discussion, old attempts, your general
-preferences, the whole README or the whole project. It receives **one task card**:
-
-```
-TASK T3
-You are the implementer for this one task. Do it directly; do not plan, orchestrate or delegate.
-
-Goal:        A patient can cancel their own booking.
-Files:       app/Actions/CancelBooking.php, app/Models/Booking.php, tests/Feature/BookingCancellationTest.php
-Contract:    POST /bookings/{booking}/cancel
-Rules:       owner only · not < 24h before the visit · status → cancelled
-Acceptance:  owner can cancel · other user 403 · < 24h rejected · test passes
-Do not:      commit · change dependencies · touch other files · orchestrate · modify payments/migrations
-```
-
-`scripts/brief-check.sh` enforces this: every section must be present, the card must be under 450
-words, and it's rejected if it shows signs of leaked context ("as we discussed", "the previous
-attempt failed", "option A vs B", pasted file contents). Reviewers get the same treatment: a card
-plus the saved diff, never the history.
-
-The "you are the implementer" line exists for a reason. Implementers run the same CLIs as
-orchestrators and load the same global rules, and in testing a Codex worker started orchestrating
-its own small task until the card told it not to.
-
-### 2. Lanes are jobs, not vendors
-
-`planner`, `architecture-review`, `backend`, `frontend`, `tests`, `refactor`, `debug`, `docs`,
-`code-review`, `ui-review`, `security-review`, `final-audit`, `small`, `fallback`.
-
-The workflow only ever says "send this to `backend`". Which tool and model that means lives in your
-lane config. Remap it any time without touching the workflow:
-
-```bash
-lanes set backend kimi          # tomorrow
-lanes set tests opencode model=deepseek/deepseek-chat
-lanes set frontend codex
-```
-
-The full list and rules are in `skills/orchestrate/references/lanes.md`.
-
-### 3. Pay for thinking only where it's needed
-
-| Route | Planner | Architecture review | Final audit |
-|---|---|---|---|
-| simple | none | none | none: the task gate decides |
-| medium | Fable | none | Opus, once |
-| complex | Fable | Astra (a different family) | Opus, once |
-| very-complex | Opus | Astra | Opus, once |
-
-Because planning runs in the `planner` lane, **your main session can run on Sonnet.** The expensive
-models are called for exactly those steps.
+1. **Route before anything expensive.** Tiny work never meets a planner, a reviewer or Opus.
+2. **ROLE → MODEL, not model → role.** Orchestra asks for a backend builder; the policy answers with
+   the first available model in that role's chain (`docs/POLICY.md`).
+3. **A token budget per feature.** A normal feature = Fable once + Opus once. Every expensive call is
+   recorded before it's made and refused when over budget.
+4. **Minimum sufficient context.** One short card per builder/reviewer, delta retries, never the
+   conversation.
+5. **Planner ≠ Builder ≠ Reviewer.** Reviews come from a different model than the builder; second
+   opinions from a different family than the planner.
 
 ## Where each rule lives
 
@@ -107,7 +63,7 @@ models are called for exactly those steps.
 | Routing rubric | `agents/task-router.md` |
 | Workflow (Claude Code) | `skills/orchestrate/SKILL.md` |
 | Workflow (Codex / other apps) | `skills/orchestrate-portable/SKILL.md` |
-| Job lanes, old names, review/debug/fallback rules | `skills/orchestrate/references/lanes.md` |
+| Roles, routing, budget | `examples/orchestra.json`, `skills/orchestrate/references/policy.md`, `scripts/orchestra` |
 | Task card format | `skills/orchestrate/references/brief-template.md` |
 | Plan format | `skills/orchestrate/references/plan-template.md` |
 | Build coordinator | `agents/lane-runner.md` |

@@ -1,2 +1,5 @@
 #!/usr/bin/env bash
-exec node "$(cd "$(dirname "$0")" && pwd)/orchestra.mjs" "$@"
+# Runs orchestra.mjs next to the real script, even when this file is reached through a symlink.
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do dir="$(cd "$(dirname "$src")" && pwd)"; src="$(readlink "$src")"; [[ "$src" != /* ]] && src="$dir/$src"; done
+exec node "$(cd "$(dirname "$src")" && pwd)/orchestra.mjs" "$@"

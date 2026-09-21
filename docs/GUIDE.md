@@ -310,7 +310,7 @@ lane with the same name. Claude asks you before trusting a project file.
 ### Measure it
 
 ```bash
-~/orchestra-skills/scripts/token-report.sh "$TMPDIR"/delegate-relay/*   # every delegated run
+~/orchestra-skills/scripts/token-report.sh              # every orchestrate run (or: token-report.sh <project>)
 ```
 
 It shows each run's lane, model, tokens, and which quota paid for it. Real numbers from the demo
@@ -355,7 +355,7 @@ You can also delegate a single task directly:
 | Send one task somewhere specific | *"Use codex-delegate --lane complex to …"* |
 | See my lanes | `~/orchestra-skills/scripts/doctor.sh` |
 | Test every lane | `~/orchestra-skills/scripts/smoke-test.sh` |
-| See what each run cost and who paid | `~/orchestra-skills/scripts/token-report.sh "$TMPDIR"/delegate-relay/*` |
+| See what each run cost and who paid | `~/orchestra-skills/scripts/token-report.sh` |
 | Let Antigravity write in a folder | `~/orchestra-skills/scripts/agy-allow.sh <folder>` |
 | Update orchestra-skills | `cd ~/orchestra-skills && git pull` |
 | Update delegate-skills | re-run the `npx skills add amElnagdy/delegate-skills …` line |

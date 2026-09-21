@@ -119,9 +119,46 @@ Do that check in the browser, look at `git log`, and push when you're happy.
 ## Who paid for what
 
 ```bash
-~/orchestra-skills/scripts/token-report.sh "$TMPDIR"/orchestrate/home-visit/*/run
+~/orchestra-skills/scripts/token-report.sh home-visit
 ```
 
 Codex runs are paid by your **ChatGPT** subscription. Antigravity runs are paid by **Google**. The
 plan, the two Opus checks and the Sonnet coordination use your **Claude Max** plan. In Claude Code,
 `/cost` or `/usage` shows the session's share.
+
+## What actually happened (2026-09-21)
+
+This example was run for real on home-visit (Laravel 12 + Fortify + Inertia React).
+
+| Step | Who | Result |
+|---|---|---|
+| Work in progress | – | committed first as `b1eef13` |
+| Baseline | Opus session | auth/patient tests 100/100, pint ✓, phpstan ✓, build ✓, types: 2 pre-existing errors elsewhere |
+| Map the code | Sonnet `Explore` | found 9 untested behaviours, e.g. nobody had tested logging in through `/admin/login`, or an Identity outage during registration |
+| Plan | Opus | T1 registration failure paths, T2 login and cross-page paths, running in parallel |
+| Plan approval | Opus `plan-reviewer` | **APPROVE in round 1**, with every fact checked against the code |
+| Build | Sonnet `lane-runner` → Claude Sonnet `fallback` (Codex was out of quota, so the runner switched automatically) | 10 new tests, 2 commits, 137/137 auth tests |
+| Done check | Opus `completion-auditor` | **DONE in round 1**. Ran the full suite (671/671), pint, phpstan, types (no new errors), build and routes. No production bug found |
+| Manual | you | register a +962 patient in the browser → patient home; log in via `/admin/login` → patient home |
+
+Commits:
+
+```
+c09a0c1 docs: mark patient auth plan done after completion audit
+b392353 test: cover login cross-page and error paths (T2)
+94b747d test: cover registration failure paths (T1)
+2d1270a docs: approved plan for patient auth end-to-end verification
+```
+
+Tokens:
+
+| Step | Model | Tokens |
+|---|---|---|
+| Map the code | Sonnet | 74k |
+| Plan approval | Opus | 28k |
+| Coordination, reviews, commits | Sonnet | 62k |
+| Writing the tests (T1 + T2) | Sonnet | 278k |
+| Done check | Opus | 20k |
+
+About 90% of the tokens ran on Sonnet; Opus did two short checks (48k). With Codex available, the
+278k "writing the tests" row would have run on the ChatGPT subscription instead of Claude.

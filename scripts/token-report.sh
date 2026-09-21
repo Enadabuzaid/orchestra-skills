@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Show which quota paid for each delegated run, so you can see what stayed off your Claude budget.
 #
-#   scripts/token-report.sh <run-dir> [<run-dir> ...]     # dirs passed to relay --out-dir
-#   scripts/token-report.sh "$TMPDIR"/delegate-relay/*    # default relay output location
+#   scripts/token-report.sh                 # every orchestrate run found on this machine
+#   scripts/token-report.sh home-visit      # only runs for that project (repo folder name)
+#   scripts/token-report.sh <run-dir> ...   # specific dirs passed to relay --out-dir
 #
 # Reads result.json + events.jsonl from each run. Changes nothing.
 set -uo pipefail
-[ $# -ge 1 ] || { sed -n '2,7p' "$0"; exit 1; }
+# No args or a project name → look in both temp locations orchestrate uses.
+if [ $# -eq 0 ] || { [ $# -eq 1 ] && [ ! -d "$1" ]; }; then
+  proj="${1:-*}"; shopt -s nullglob
+  set -- "${TMPDIR:-/tmp}"/orchestrate/$proj/*/run /tmp/orchestrate/$proj/*/run
+  [ $# -gt 0 ] || { echo "No orchestrate runs found${1:+ for $proj}."; exit 1; }
+fi
 
 node - "$@" <<'JS'
 const fs = require("fs"), path = require("path");

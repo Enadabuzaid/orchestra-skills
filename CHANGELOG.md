@@ -3,6 +3,19 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
+## [0.2.1] - 2026-09-21
+
+### Added
+- `docs/QUICKSTART.md`: one page from "I opened Claude Code" to a finished feature.
+- `docs/EXAMPLE.md`: a real run on a Laravel app (patient login/register), with the plan, gates,
+  commits and token numbers.
+
+### Fixed
+- Claude runs (lanes, `e2e-test.sh`, `smoke-test.sh`) use the claude.ai subscription even when an
+  unrelated `ANTHROPIC_API_KEY` is set; `doctor.sh` reports which billing Claude uses.
+- `token-report.sh` labels runs by task.
+- The global CLAUDE.md rules now point to the `lane-runner`.
+
 ## [0.2.0] - 2026-09-21
 
 ### Added

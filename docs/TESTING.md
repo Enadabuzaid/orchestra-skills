@@ -110,7 +110,7 @@ item struck through.
 ## Step 5. Check the token savings
 
 ```bash
-~/orchestra-skills/scripts/token-report.sh "$TMPDIR"/delegate-relay/*
+~/orchestra-skills/scripts/token-report.sh
 ```
 
 Each delegated run shows its tokens and **who paid**: ChatGPT (Codex), Google (Antigravity),

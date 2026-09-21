@@ -73,7 +73,8 @@ CLI: move a lane to a CLI you have (see the [guide](docs/GUIDE.md#9-changing-lan
 
 ## Use
 
-In Claude Code, on Opus (or Fable for hard features):
+New here? Read **[docs/QUICKSTART.md](docs/QUICKSTART.md)**. In Claude Code, inside your project, on
+Opus (or Fable for hard features):
 
 > Use orchestrate to add CSV export to the reports page.
 
@@ -92,6 +93,7 @@ built and how it was verified. You review `git log` and push.
 
 ## Docs
 
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. "I opened Claude Code, what now?" in one page
 - **[docs/EXAMPLE.md](docs/EXAMPLE.md)**: a real example ("make sure patient login and register work"): where to type, what you'll see at each step, and who pays
 - **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide, from install and first feature to lanes,
   models, permissions and token savings

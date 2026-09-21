@@ -104,6 +104,11 @@ START="<!-- orchestra-skills:start -->"
 END="<!-- orchestra-skills:end -->"
 update_marked_file "$CLAUDE_DIR/CLAUDE.md" "$ROOT/CLAUDE.snippet.md" "$START" "$END"
 
+# The `orchestra` command on your PATH (only if ~/.local/bin exists; otherwise use scripts/orchestra).
+if [ -d "$HOME/.local/bin" ]; then
+  safe_link "$ROOT/scripts/orchestra" "$HOME/.local/bin/orchestra"
+fi
+
 # Default lane map, only if you don't have one yet (never overwrites).
 LANES="${XDG_CONFIG_HOME:-$HOME/.config}/delegate-skills/config.json"
 if [ ! -f "$LANES" ]; then

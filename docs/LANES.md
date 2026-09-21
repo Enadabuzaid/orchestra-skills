@@ -1,5 +1,9 @@
 # Changing who does what (lanes)
 
+> **Since v0.5 the orchestrate workflow uses the Orchestra policy instead of lanes**: roles with
+> ordered fallbacks, chosen by availability. See **[POLICY.md](POLICY.md)** and `orchestra roles`.
+> Lanes (below) still work for running a single relay by hand with `--lane`.
+
 **A lane is a job, not a vendor.** The workflow says "send this to `backend`" or "have
 `code-review` check it". Which tool and model does each job is your choice, and you can change it
 with one command. Every change is validated and backed up first, and `undo` brings the previous

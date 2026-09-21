@@ -3,9 +3,24 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
-## [0.5.0] - 2026-09-21
+## [0.5.0] - 2026-09-21 — Token Intelligence
 
 ### Added
+- **Task router before anything expensive**: tiny / small / feature / complex with `Hard` and
+  `Areas`. "Change button text" is route → card → builder → test → done.
+- **Model policy** (`examples/orchestra.json`, `scripts/orchestra`): ROLE → MODEL with ordered
+  fallbacks, live availability (installed, logged in, model offered, quota), `orchestra exhausted`,
+  builder ≠ reviewer (`--not-model`), different family for second opinions (`--not-family`),
+  `--cheap-only` when the budget is used.
+- **Token budget**: `expensive_calls`, per-kind `max_calls`, `only_for` for second opinions,
+  `max_retries`, card token limits. `orchestra budget spend` records each call first and refuses
+  over-budget ones. A normal feature = Fable once + Opus once.
+- **Compact cards**: task card / delta retry / review card formats; `brief-check.sh` enforces
+  sections, token limits and no leaked context.
+- **Delta retry**: only the failing check, same session, "already accepted" list.
+- **Run metrics**: `orchestra metrics <run>`.
+- `docs/POLICY.md`, `docs/ROADMAP.md`. `smoke-test.sh role:<role>` tests a role through the policy.
+- Earlier in this release:
 - **Task router** (`agents/task-router.md`, Haiku): simple / medium / complex / very-complex. Simple
   work gets one task card and no plan; medium gets a plan but no architecture review; only
   complex+ pays for the review.

@@ -1,0 +1,248 @@
+{
+  "version": "orchestra.v1",
+  "models": {
+    "fable": {
+      "tool": "claude",
+      "model": "fable",
+      "effort": "high",
+      "expensive": true
+    },
+    "opus": {
+      "tool": "claude",
+      "model": "opus",
+      "effort": "high",
+      "expensive": true
+    },
+    "sonnet": {
+      "tool": "claude",
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    "haiku": {
+      "tool": "claude",
+      "model": "haiku",
+      "effort": "low"
+    },
+    "astra": {
+      "tool": "codex",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "expensive": true
+    },
+    "codex": {
+      "tool": "codex",
+      "effort": "medium"
+    },
+    "luna": {
+      "tool": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "medium"
+    },
+    "antigravity": {
+      "tool": "agy",
+      "model": "gemini-3.8-flash-high"
+    },
+    "kimi": {
+      "tool": "kimi"
+    },
+    "deepseek": {
+      "tool": "opencode",
+      "model": "deepseek/deepseek-chat"
+    }
+  },
+  "roles": {
+    "planner-light": {
+      "primary": "sonnet",
+      "fallback": [
+        "luna",
+        "haiku"
+      ],
+      "read_only": true
+    },
+    "planner": {
+      "primary": "fable",
+      "fallback": [
+        "astra",
+        "opus"
+      ],
+      "read_only": true
+    },
+    "planner-hard": {
+      "primary": "opus",
+      "fallback": [
+        "fable",
+        "astra"
+      ],
+      "read_only": true
+    },
+    "architecture": {
+      "primary": "astra",
+      "fallback": [
+        "opus"
+      ],
+      "read_only": true,
+      "different_family_from_planner": true
+    },
+    "backend": {
+      "primary": "codex",
+      "fallback": [
+        "kimi",
+        "deepseek",
+        "sonnet"
+      ]
+    },
+    "frontend": {
+      "primary": "antigravity",
+      "fallback": [
+        "codex",
+        "kimi",
+        "sonnet"
+      ]
+    },
+    "tests": {
+      "primary": "kimi",
+      "fallback": [
+        "deepseek",
+        "luna",
+        "sonnet"
+      ]
+    },
+    "refactor": {
+      "primary": "kimi",
+      "fallback": [
+        "codex",
+        "sonnet"
+      ]
+    },
+    "debug": {
+      "primary": "codex",
+      "fallback": [
+        "sonnet"
+      ]
+    },
+    "docs": {
+      "primary": "deepseek",
+      "fallback": [
+        "haiku",
+        "sonnet"
+      ]
+    },
+    "small": {
+      "primary": "deepseek",
+      "fallback": [
+        "kimi",
+        "codex",
+        "sonnet"
+      ]
+    },
+    "review": {
+      "primary": "kimi",
+      "fallback": [
+        "deepseek",
+        "luna",
+        "haiku",
+        "sonnet"
+      ],
+      "read_only": true,
+      "different_from_builder": true
+    },
+    "ui-review": {
+      "primary": "codex",
+      "fallback": [
+        "luna",
+        "sonnet"
+      ],
+      "read_only": true,
+      "different_from_builder": true
+    },
+    "security-review": {
+      "primary": "astra",
+      "fallback": [
+        "sonnet"
+      ],
+      "read_only": true,
+      "different_from_builder": true
+    },
+    "final-audit": {
+      "primary": "opus",
+      "fallback": [],
+      "read_only": true
+    }
+  },
+  "routing": {
+    "tiny": {
+      "max_tasks": 1,
+      "planning": "none",
+      "second_opinion": false,
+      "reviews": [],
+      "final_audit": false,
+      "coordinator": "session"
+    },
+    "small": {
+      "max_tasks": 2,
+      "planning": "light",
+      "planner": "planner-light",
+      "second_opinion": false,
+      "reviews": [
+        "review"
+      ],
+      "final_audit": false,
+      "coordinator": "session"
+    },
+    "feature": {
+      "max_tasks": 6,
+      "planning": "full",
+      "planner": "planner",
+      "second_opinion": false,
+      "reviews": [
+        "review",
+        "ui-review",
+        "security-review"
+      ],
+      "final_audit": true,
+      "coordinator": "lane-runner"
+    },
+    "complex": {
+      "max_tasks": null,
+      "planning": "advanced",
+      "planner": "planner",
+      "planner_when_hard": "planner-hard",
+      "second_opinion": true,
+      "reviews": [
+        "review",
+        "ui-review",
+        "security-review"
+      ],
+      "final_audit": true,
+      "coordinator": "lane-runner"
+    }
+  },
+  "budget": {
+    "expensive_calls": 3,
+    "planning": {
+      "max_calls": 1
+    },
+    "second_opinion": {
+      "max_calls": 1,
+      "only_for": [
+        "architecture",
+        "security",
+        "payments",
+        "migrations"
+      ]
+    },
+    "final_audit": {
+      "max_calls": 1
+    },
+    "implementation": {
+      "max_retries": 2,
+      "retry_mode": "delta"
+    },
+    "briefs": {
+      "max_tokens": 1500
+    },
+    "reviews": {
+      "max_tokens": 1000
+    }
+  }
+}

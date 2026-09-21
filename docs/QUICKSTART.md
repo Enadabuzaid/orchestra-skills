@@ -78,6 +78,10 @@ Do the manual check it gives you (usually "open this page and click this"), look
 
 ## Change who does what
 
+Since v0.5: `orchestra roles` shows every role and the model it uses now; `orchestra set backend codex kimi sonnet`
+changes a chain; `orchestra exhausted codex --until 21:34` skips a tool that hit its quota. Details: **[POLICY.md](POLICY.md)**.
+The older lane commands below still work for single relays.
+
 ```bash
 ~/orchestra-skills/scripts/lanes.sh                                   # show
 ~/orchestra-skills/scripts/lanes.sh set backend codex                 # backend → Codex

@@ -1,6 +1,6 @@
 # orchestra-skills
 
-**Big models think. Cheap models type.** A Claude Code workflow that uses Fable, Opus and GPT-6
+**An AI engineering router: it decides how much intelligence, context and money a coding task deserves.** A Claude Code workflow that uses Fable, Opus and GPT-6
 Astra only for planning and checking, and sends the actual coding to cheaper CLIs: Codex,
 Antigravity (Gemini), Claude Sonnet and Copilot. Every plan is checked by Opus before any code is
 written.
@@ -93,6 +93,8 @@ built and how it was verified. You review `git log` and push.
 
 ## Docs
 
+- **[docs/POLICY.md](docs/POLICY.md)**: the Orchestra policy: routing levels, ROLE → MODEL with fallbacks, token budget, compact cards, run metrics
+- **[docs/ROADMAP.md](docs/ROADMAP.md)**: v0.5 Token Intelligence → v0.6 More models → v0.7 Smart context
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: the design in one page: router → planner lane → different-AI review → job lanes with task cards → final audit
 - **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. "I opened Claude Code, what now?" in one page
 - **[docs/CODEX.md](docs/CODEX.md)**: run everything from the **Codex app** (Astra plans, Claude Fable/Opus check, lanes build)
@@ -117,7 +119,9 @@ built and how it was verified. You review `git log` and push.
 | `examples/lanes.json` | The default lane map |
 | `examples/demo-app/` | A tiny app for the end-to-end test |
 | `install.sh` | Links everything into `~/.claude` (safe to re-run) |
-| `scripts/lanes.sh` | Change lanes: show / set / remove / replace / use preset / resolve / undo |
+| `scripts/orchestra` | The policy engine: `roles`, `resolve`, `set`, `route`, `budget`, `exhausted`, `metrics`, `edit`, `undo` |
+| `examples/orchestra.json` | The default policy (models, roles with fallbacks, routing, budget) |
+| `scripts/lanes.sh` | Older per-lane config for running single relays by hand |
 | `scripts/brief-check.sh` | Rejects task cards that are incomplete, too long, or leak context |
 | `agents/task-router.md` | Haiku router: simple / medium / complex / very-complex |
 | `scripts/doctor.sh` | Checks the setup (changes nothing) |

@@ -32,6 +32,16 @@ if [ -d "$CODEX_DIR" ]; then
   [ -f "$CODEX_DIR/skills/orchestrate-portable/SKILL.md" ] && pass "Codex: orchestrate-portable skill" || fail "Codex: orchestrate-portable missing: run ./install.sh"
 fi
 
+printf '%s\n' "Orchestra policy"
+ORCH="$(cd "$(dirname "$0")" && pwd)/orchestra"
+if [ "$HAVE_NODE" -eq 1 ] && roles_out="$("$ORCH" roles 2>&1)"; then
+  none="$(printf '%s\n' "$roles_out" | grep -c "NONE AVAILABLE" || true)"
+  printf '%s\n' "$roles_out" | sed -n '3,$p' | sed 's/^/    /'
+  if [ "$none" -eq 0 ]; then pass "every role has an available model"; else fail "$none role(s) have no available model: install/log in a tool, or change the chain (orchestra set <role> …)"; fi
+else
+  fail "orchestra policy unreadable: $(printf '%s' "${roles_out:-}" | head -1)"
+fi
+
 printf '%s\n' "delegate-skills"
 for s in delegate-setup codex-delegate agy-delegate claude-delegate copilot-delegate; do
   [ -f "$CLAUDE_DIR/skills/$s/SKILL.md" ] && pass "$s" || fail "$s missing (see README install step 1)"

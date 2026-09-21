@@ -49,7 +49,7 @@ after="$(find "$BK" -type f | wc -l | tr -d ' ')"
 pass "installer backs up conflicts outside skill folders and is idempotent"
 
 printf '%s\n' "Doctor"
-for s in delegate-setup codex-delegate agy-delegate claude-delegate copilot-delegate; do mkdir -p "$CLAUDE_A/skills/$s"; : > "$CLAUDE_A/skills/$s/SKILL.md"; done
+for s in delegate-setup codex-delegate agy-delegate claude-delegate copilot-delegate; do mkdir -p "$CLAUDE_A/skills/$s/scripts"; : > "$CLAUDE_A/skills/$s/SKILL.md"; : > "$CLAUDE_A/skills/$s/scripts/relay.mjs"; done
 mkdir -p "$CLAUDE_A/skills/delegate-setup/scripts" "$TMP/bin"
 cat > "$CLAUDE_A/skills/delegate-setup/scripts/discover.mjs" <<'JS'
 process.stdout.write(JSON.stringify({discovered:[
@@ -108,24 +108,49 @@ for (const arr of [a,b]) { if (!arr.includes(`write_file(${project})`) || !arr.s
 JS
 pass "Antigravity helper updates both known config schemas"
 
-printf '%s\n' "Task cards (context isolation)"
-CARD="$TMP/card.md"
-awk '/^## Example/{f=1;next} /^Why the second/{f=0} f' "$ROOT/skills/orchestrate/references/brief-template.md" | sed -n '/^```markdown/,/^```$/p' | sed '1d;$d' > "$CARD"
-"$ROOT/scripts/brief-check.sh" "$CARD" >/dev/null || fail "brief-check rejected the template's own example card"
-{ cat "$CARD"; echo "As we discussed earlier in the chat, go with option A."; } > "$TMP/leak.md"
+printf '%s\n' "Cards (minimum sufficient context)"
+TPL="$ROOT/skills/orchestrate/references/brief-template.md"
+for n in 1 2 3; do
+  awk -v n="$n" '/^```markdown/{c++; if(c==n){f=1;next}} f&&/^```$/{f=0} f' "$TPL" > "$TMP/card$n.md"
+  "$ROOT/scripts/brief-check.sh" "$TMP/card$n.md" >/dev/null || fail "brief-check rejected the template's example card #$n"
+done
+{ cat "$TMP/card1.md"; echo "As we discussed earlier in the chat, go with option A."; } > "$TMP/leak.md"
 if "$ROOT/scripts/brief-check.sh" "$TMP/leak.md" >/dev/null 2>&1; then fail "brief-check accepted a card with leaked conversation context"; fi
-grep -v "You are the implementer" "$CARD" > "$TMP/noguard.md"
-if "$ROOT/scripts/brief-check.sh" "$TMP/noguard.md" >/dev/null 2>&1; then fail "brief-check accepted a card without the implementer guard"; fi
-pass "brief-check accepts the example card, rejects leaks and missing guard"
+grep -v "orchestrate or delegate" "$TMP/card1.md" > "$TMP/noguard.md"
+if "$ROOT/scripts/brief-check.sh" "$TMP/noguard.md" >/dev/null 2>&1; then fail "brief-check accepted a task card that doesn't forbid orchestrating"; fi
+grep -v "Already accepted" "$TMP/card2.md" > "$TMP/nodelta.md"
+if "$ROOT/scripts/brief-check.sh" "$TMP/nodelta.md" >/dev/null 2>&1; then fail "brief-check accepted a delta retry without Already accepted"; fi
+pass "task/delta/review cards pass; leaks, missing guard and incomplete deltas fail"
 
-printf '%s\n' "Job lanes"
-LCFG="$TMP/lanes-home/.config"; mkdir -p "$LCFG/delegate-skills"
-printf '%s\n' '{"version":"delegate-fleet.v1","lanes":{"ui":{"implementer":"agy"},"review":{"implementer":"claude","readOnly":true}}}' > "$LCFG/delegate-skills/config.json"
-r1="$(XDG_CONFIG_HOME="$LCFG" "$ROOT/scripts/lanes.sh" resolve frontend 2>&1)" || fail "lanes resolve frontend failed on an old-style config: $r1"
-printf '%s' "$r1" | grep -q "lane=ui tool=agy" || fail "frontend did not resolve to the old ui lane: $r1"
-r2="$(XDG_CONFIG_HOME="$LCFG" "$ROOT/scripts/lanes.sh" resolve code-review 2>&1)" || fail "lanes resolve code-review failed: $r2"
-node -e 'const fs=require("fs");for(const f of process.argv.slice(1)){const c=JSON.parse(fs.readFileSync(f,"utf8"));for(const n of Object.keys(c.lanes)) if(/^(codex|agy|claude|kimi|deepseek|copilot|opencode)(-|$)/.test(n)){console.error(`${f}: vendor-named lane ${n}`);process.exit(1)}}' "$ROOT"/examples/lanes*.json || fail "a preset has a vendor-named lane"
-pass "jobs resolve through old names; presets have no vendor-named lanes"
+printf '%s\n' "Orchestra policy engine (fake tools, no model calls)"
+OH="$TMP/orch-home"; mkdir -p "$OH/.claude/skills/delegate-setup/scripts"
+for t in codex claude agy; do mkdir -p "$OH/.claude/skills/$t-delegate/scripts"; : > "$OH/.claude/skills/$t-delegate/scripts/relay.mjs"; done
+cat > "$OH/.claude/skills/delegate-setup/scripts/discover.mjs" <<'JS'
+process.stdout.write(JSON.stringify({discovered:[
+  {key:"codex",authenticated:true,models:{status:"reported",values:["gpt-6-astra","gpt-5.6-luna"]}},
+  {key:"claude",authenticated:true,models:{status:"aliases",values:["fable","opus","sonnet","haiku"]}},
+  {key:"agy",authenticated:true,models:{status:"reported",values:["gemini-3.8-flash-high\tGemini"]}}
+]}));
+JS
+ORC() { HOME="$OH" XDG_CONFIG_HOME="$OH/.config" XDG_CACHE_HOME="$OH/.cache" "$ROOT/scripts/orchestra" "$@"; }
+pick() { ORC resolve "$@" --json | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0)).model))'; }
+[ "$(pick backend)" = codex ] || fail "backend should resolve to codex when it's available"
+[ "$(pick tests)" = luna ] || fail "tests should skip kimi/deepseek (not installed) and use luna"
+ORC exhausted codex --for 60m >/dev/null
+[ "$(pick backend)" = sonnet ] || fail "backend should fall back to sonnet while codex is exhausted"
+ORC available codex >/dev/null
+[ "$(pick review --not-model luna)" = haiku ] || fail "review must skip the builder's model"
+ORC resolve review --json | grep -q '"--read-only"' || fail "review must resolve read-only"
+[ "$(pick security-review --cheap-only)" = sonnet ] || fail "--cheap-only must skip expensive models"
+[ "$(ORC route simple planning)" = none ] || fail "route alias simple → tiny"
+[ "$(ORC route small planner)" = planner-light ] || fail "small must use planner-light"
+R="selftest-$$"; ORC budget start "$R" >/dev/null
+ORC budget spend "$R" planner fable >/dev/null || fail "budget refused the planner call"
+ORC budget spend "$R" architecture astra >/dev/null || fail "budget refused the second opinion"
+ORC budget spend "$R" final-audit opus >/dev/null || fail "budget refused the final audit"
+ORC budget spend "$R" backend sonnet >/dev/null || fail "budget must allow cheap calls"
+if ORC budget spend "$R" security-review astra >/dev/null 2>&1; then fail "budget allowed a 4th expensive call"; fi
+pass "roles resolve by availability/quota; builder≠reviewer; cheap-only; routing; budget refuses the 4th expensive call"
 
 printf '%s\n' "Token report discovery"
 RUNROOT="/tmp/orchestrate/orchestra-selftest-$$/T1/run"; mkdir -p "$RUNROOT"

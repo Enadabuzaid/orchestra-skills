@@ -1,0 +1,21 @@
+{
+  "version": "delegate-fleet.v1",
+  "lanes": {
+    "backend": {
+      "implementer": "codex",
+      "effort": "medium"
+    },
+    "ui": {
+      "implementer": "agy",
+      "model": "gemini-3.8-flash-high"
+    },
+    "small": {
+      "implementer": "claude",
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    "fallback": {
+      "implementer": "copilot"
+    }
+  }
+}

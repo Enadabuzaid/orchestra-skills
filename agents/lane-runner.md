@@ -22,7 +22,9 @@ Tasks the plan marks as independent (disjoint files) may run in parallel (`relay
 
 1. **Card.** Write a task card in the template's format with only this task's facts (files,
    contract, rules, acceptance, gate, don't), to `…/<task>/card.md`. Run
-   `~/orchestra-skills/scripts/brief-check.sh <card>` and fix it until it passes.
+   `~/orchestra-skills/scripts/brief-check.sh <card>` and fix it until it passes. This holds for
+   every card you send (task, delta retry, review): **a card that fails `brief-check.sh` is never
+   sent**; fix the card, don't skip the check.
 2. **Builder.** `$O resolve <task role>` → `$O budget spend <run> <role> <model>` → run the printed
    `command` with `--brief <card> --cd <repo> --out-dir …/<task>/run --timeout 45m`.
    - It fails because of quota → `$O exhausted <tool>` (use the reset time from the error if there
@@ -39,8 +41,12 @@ Tasks the plan marks as independent (disjoint files) may run in parallel (`relay
    `git status --porcelain` to `…/<task>/review/diff.patch`, and write a review card. For each review
    role in the level's policy that applies (`review` for every task, `ui-review` for frontend tasks,
    `security-review` for `Sensitive: yes`):
-   `$O resolve <review role> --not-model <builder model>` (add `--not-family <builder tool>` for
-   `security-review`) → `$O budget spend …`. A refusal means `--cheap-only`. Then run it read-only.
+   `$O resolve <review role> --not-model <builder model>` (add `--not-family <builder tool>` only
+   for `security-review`; `review` and `ui-review` may use another model of the same family, e.g.
+   Luna reviewing Codex) → `$O budget spend …`. A refusal means `--cheap-only`. Then run it
+   read-only. Use the model `resolve` printed; don't pick one yourself. If the reviewer can't read
+   the diff file, copy `diff.patch` next to the repo's `.git` (e.g. `<repo>/.git/orchestra-diff.patch`,
+   which git ignores) and point the card there.
    Real findings → a delta retry to the builder (they count as retries). You decide what's real:
    ignore opinions that contradict the plan, and say so.
 5. **Check it yourself too:** only the task's files changed, the gate passes, the acceptance items

@@ -108,7 +108,8 @@ while IFS= read -r f; do RUNS+=("$(dirname "$f")"); done < <(
   find "${TMPDIR:-/tmp}/orchestrate/$(basename "$REPO")" "/tmp/orchestrate/$(basename "$REPO")" \
        "${TMPDIR:-/tmp}"/delegate-relay/"$(basename "$REPO")"-* -name result.json 2>/dev/null | sort -u)
 check "coding was delegated (relay runs found)"     "[ ${#RUNS[@]} -gt 0 ]"
-check "some coding ran on a non-Claude quota"       "[ ${#RUNS[@]} -gt 0 ] && cat ${RUNS[*]+${RUNS[*]/%//result.json}} < /dev/null | grep -q -e codexVersion -e agyVersion"
+# grep over the files directly: with pipefail, `cat … | grep -q` fails as soon as grep matches (cat gets SIGPIPE).
+check "some coding ran on a non-Claude quota"       "[ ${#RUNS[@]} -gt 0 ] && grep -q -e codexVersion -e agyVersion -e opencodeVersion -e kimiVersion -- ${RUNS[*]+${RUNS[*]/%//result.json}}"
 
 step "5. Commits"
 git log --oneline "$BASE..HEAD" | sed 's/^/  /'

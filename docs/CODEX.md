@@ -2,33 +2,35 @@
 
 You can run the whole workflow **from Codex** instead of Claude Code:
 
-| Step | Job lane | Default in the `codex-orchestrator` preset |
+| Step | Role | Default policy (`orchestra roles`) |
 |---|---|---|
-| Route | – (your Codex session, quick look) | the session model |
-| Plan | `planner` / `planner-hard` | Claude Fable / Opus (read-only) |
-| Challenge hard plans | `architecture-review` (different family from the planner) | Codex GPT-6 Astra |
-| Backend / frontend / tests | `backend`, `frontend`, `tests` | Codex GPT-5.6-Luna / Codex / Codex Luna |
-| Reviews | `code-review`, `ui-review`, `security-review` | Haiku / Antigravity / Sonnet |
+| Route | – (your Codex session, the rubric in `agents/task-router.md`) | the session model |
+| Plan | `planner` / `planner-hard` | Claude Fable → Astra → Opus / Opus → Fable → Astra (read-only) |
+| Second opinion on complex plans | `architecture` (a different family from the planner) | Codex GPT-6 Astra → Opus |
+| Backend / frontend / tests / docs | `backend`, `frontend`, `tests`, `docs` | the cheapest available: Codex, Antigravity, Kimi, DeepSeek, Luna, OpenCode free, then Sonnet |
+| Reviews (read-only, never the builder's model) | `review`, `ui-review`, `security-review` | DeepSeek/Luna/OpenCode free/Copilot/Haiku/Sonnet · Codex/Luna/Copilot/Sonnet · Astra/Copilot/Sonnet |
 | Final audit (loops until DONE) | `final-audit` | Claude Opus (read-only) |
 
 Codex uses the `orchestrate-portable` skill. It does the same job as `orchestrate` in Claude Code,
-but instead of Claude Code subagents, it calls Claude **through the relay** for the two checks.
+but instead of Claude Code subagents, it calls the roles **through the relays**, including Claude
+for the plan and the final audit.
 
 ## One-time setup
 
 ```bash
 cd ~/orchestra-skills && git pull && ./install.sh     # links orchestrate-portable into ~/.codex/skills
-~/orchestra-skills/scripts/lanes.sh use codex-orchestrator
-~/orchestra-skills/scripts/smoke-test.sh planner architecture-review backend frontend final-audit
+~/orchestra-skills/scripts/doctor.sh                  # every role has an available model?
+~/orchestra-skills/scripts/smoke-test.sh role:planner role:architecture role:backend role:frontend role:final-audit
 ```
 
-`lanes use codex-orchestrator` sets exactly the table above. Change any row afterwards with
-`lanes set …` (see [LANES.md](LANES.md)), for example:
+The same policy file serves Claude Code and Codex. Change a chain with `orchestra set` (see
+[POLICY.md](POLICY.md)), for example:
 
 ```bash
-lanes set planner claude model=opus readonly          # Opus plans instead of Fable
-lanes set backend codex model=gpt-5.6-terra           # a bigger Codex model for backend
-lanes set frontend agy model=gemini-3.8-flash-high    # frontend on Antigravity instead
+orchestra set planner opus fable astra --read-only    # Opus plans first
+orchestra model terra tool=codex model=gpt-5.6-terra effort=high && orchestra set backend terra codex luna sonnet
+orchestra set frontend antigravity codex sonnet       # frontend on Antigravity first
+orchestra check                                       # the policy is still valid
 ```
 
 ## Every feature, step by step
@@ -43,13 +45,14 @@ lanes set frontend agy model=gemini-3.8-flash-high    # frontend on Antigravity 
    > Use orchestrate-portable to let patients cancel a booking up to 24h before the visit. Done means:
    > cancel button on the booking page, status becomes "cancelled", provider gets an email.
 5. **Watch for these, in order:**
-   - the route (simple / medium / complex / very-complex);
-   - `docs/plans/<date>-<feature>.md` from the `planner` lane, with Tasks, Definition of Done and
+   - the route (tiny / small / feature / complex);
+   - `docs/plans/<date>-<feature>.md` from the `planner` role, with Tasks, Definition of Done and
      Verify;
-   - for complex work, the `architecture-review` (a different family) replying `APPROVE` or
-     `CHANGES REQUIRED`. No code before `APPROVE`;
-   - one task card per task sent to its job lane, then code/ui/security reviews; one commit per task;
-   - Codex running every Verify command and handing the output to the `final-audit` lane, which
+   - for complex work touching architecture, security, payments or migrations, the `architecture`
+     role (a different family) replying `APPROVE` or `CHANGES REQUIRED`. No code before `APPROVE`;
+   - one task card per task sent to its role's model, then review / ui-review / security-review by a
+     different model; one commit per task;
+   - Codex running every Verify command and handing the output to the `final-audit` role, which
      replies `DONE` or `GAPS`. Gaps get built, then it checks again;
    - the final report, including a manual check for you.
 6. **Do the manual check, then look at `git log` and push.**

@@ -3,6 +3,14 @@
 This walks through one real feature on a Laravel + Inertia/React app (home-visit), from the first
 prompt to the final report.
 
+> Recorded on v0.2 (2026-09-21). Since v0.5 the same run looks like this: the `task-router` (Haiku)
+> would route it `feature`; the plan comes from the `planner` role (Fable) instead of your session;
+> the mandatory Opus `plan-reviewer` gate became the `architecture` second opinion (Astra), used
+> only for complex work; the lanes named below are now roles (`ui` = `frontend`, `fallback` = the
+> next model in the role's chain), chosen by `orchestra resolve`; and your session runs on Sonnet,
+> since it only coordinates. The gates, the per-task commits, the `DONE` audit and the token
+> numbers are unchanged. See [QUICKSTART.md](QUICKSTART.md) for the current steps.
+
 ## Where do I type?
 
 **In Claude Code, inside your project folder.** Only there.

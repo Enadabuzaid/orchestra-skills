@@ -61,5 +61,8 @@ Optional: any `<job>-fallback` lane is tried before the global `fallback` for th
 4. **Challenger family rule:** the architecture review must come from a different model family
    than the planner that actually ran. Use `architecture-review`, unless it's the same family, in which
    case use `architecture-review-alt`.
-5. **Fallback chain for any job:** `<job>` → `<job>-fallback` → `fallback`. For planners:
+5. **Read-only stays read-only.** Planner, review, architecture-review and final-audit jobs always
+   run with `--read-only`, and so does any fallback that stands in for them, even if that lane
+   can normally write.
+6. **Fallback chain for any job:** `<job>` → `<job>-fallback` → `fallback`. For planners:
    `planner` → `planner-fallback` → `planner-alt`. Always report which lane actually ran.

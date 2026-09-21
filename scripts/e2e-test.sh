@@ -31,7 +31,10 @@ step "2. Demo repo at $REPO"
 cp -R "$ROOT/examples/demo-app" "$REPO" && cd "$REPO" || exit 1
 git init -q && git add -A && git -c user.name=e2e -c user.email=e2e@example.com commit -qm "chore: demo baseline"
 BASE="$(git rev-parse --short HEAD)"; echo "  base commit $BASE"
-if [ "$UI_LANE" = "ui" ]; then "$ROOT/scripts/agy-allow.sh" "$REPO" --tests "node" | sed 's/^/  /'; fi
+# Give Antigravity scoped rights in the throwaway repo whenever any lane uses it.
+if node -e 'const c=require(process.argv[1]);process.exit(Object.values(c.lanes).some(l=>l.implementer==="agy")?0:1)' "${XDG_CONFIG_HOME:-$HOME/.config}/delegate-skills/config.json" 2>/dev/null; then
+  "$ROOT/scripts/agy-allow.sh" "$REPO" --tests "node" | sed 's/^/  /'
+fi
 
 step "3. Unattended orchestrate run (orchestrator: $ORCH, ui task → $UI_LANE lane)"
 SKILL_NAME="orchestrate"; [ "$ORCH" = "codex" ] && SKILL_NAME="orchestrate-portable"
@@ -72,7 +75,12 @@ else
 fi
 echo "  finished in $(( (SECONDS - START) / 60 ))m $(( (SECONDS - START) % 60 ))s (log: $LOG)"
 
-if node -e "process.exit(/API Error|usage limit|rate limit/i.test(require('$LOG').result||'')?0:1)" 2>/dev/null; then
+if [ "$ORCH" = "codex" ] && grep -qiE "usage limit|rate limit|quota" "$WORK/codex.log" 2>/dev/null && [ ! -s "$WORK/last-message.txt" ]; then
+  echo "  ! Codex stopped before starting: $(grep -iE -m1 'usage limit|rate limit|quota' "$WORK/codex.log" | cut -c1-160)"
+  echo "    That's a quota problem, not a workflow bug. Re-run after it resets."
+  exit 3
+fi
+if node -e "const r=require('$LOG');process.exit((r.is_error||/^\\s*API Error/.test(r.result||''))?0:1)" 2>/dev/null; then
   echo "  ! Claude stopped with an API error: $(node -e "console.log((require('$LOG').result||'').slice(0,160))")"
   echo "    That's an account or quota problem, not a workflow bug. Fix it and re-run."
 fi
@@ -95,10 +103,10 @@ check "work is committed (clean tree)"              "[ -z \"\$(git status --porc
 check "at least 4 commits after the baseline"       "[ \$(git rev-list --count $BASE..HEAD) -ge 4 ]"
 check "no Co-Authored-By trailers"                  "! git log --format=%B | grep -qi 'co-authored-by'"
 check "completion-auditor verdict: DONE"            "node -e \"const r=require('$LOG');process.exit(/E2E-RESULT: DONE\\s*\$/.test(r.result||'')?0:1)\""
-shopt -s nullglob
-CANDIDATES=( "${TMPDIR:-/tmp}"/delegate-relay/"$(basename "$REPO")"-* "${TMPDIR:-/tmp}"/orchestrate/"$(basename "$REPO")"/*/run "${TMPDIR:-/tmp}"/orchestrate/"$(basename "$REPO")"/* /tmp/orchestrate*"${REPO##*-}"*/* )
 RUNS=()
-for d in ${CANDIDATES[@]+"${CANDIDATES[@]}"}; do [ -f "${d%/}/result.json" ] && RUNS+=("${d%/}"); done
+while IFS= read -r f; do RUNS+=("$(dirname "$f")"); done < <(
+  find "${TMPDIR:-/tmp}/orchestrate/$(basename "$REPO")" "/tmp/orchestrate/$(basename "$REPO")" \
+       "${TMPDIR:-/tmp}"/delegate-relay/"$(basename "$REPO")"-* -name result.json 2>/dev/null | sort -u)
 check "coding was delegated (relay runs found)"     "[ ${#RUNS[@]} -gt 0 ]"
 check "some coding ran on a non-Claude quota"       "[ ${#RUNS[@]} -gt 0 ] && cat ${RUNS[*]+${RUNS[*]/%//result.json}} < /dev/null | grep -q -e codexVersion -e agyVersion"
 

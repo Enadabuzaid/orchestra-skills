@@ -108,7 +108,8 @@ For each task, in plan order; tasks with disjoint files may run in parallel (`re
    against TASK <ID>: goal, rules, acceptance, allowed files. Reply PASS or numbered findings with
    file:line.") to each review job that applies and is configured: `code-review` (every task),
    `ui-review` (frontend tasks), `security-review` (tasks marked `Sensitive: yes`, or touching auth,
-   permissions, payments, uploads, raw SQL, crypto or secrets). Real findings → a delta card to the
+   permissions, payments, uploads, raw SQL, crypto or secrets). Reviews, and any fallback standing in
+   for a review, always run with `--read-only`. Real findings → a delta card to the
    implementer (max 2 rounds). With no review job configured, review the diff yourself.
 6. **Land:** run the plan's test command, then commit only this task's files and set Status to done
    in the plan, in the same commit. Plain conventional message, no Co-Authored-By trailer.

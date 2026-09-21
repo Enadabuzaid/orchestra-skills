@@ -53,6 +53,9 @@ Always read `~/.claude/skills/orchestrate/references/brief-template.md`.
    - `ui-review` (older name: `<lane>-check`, e.g. `ui-check`): frontend tasks;
    - `security-review`: tasks marked `Sensitive: yes`, or whose files touch auth, permissions,
      payments, uploads, raw SQL, crypto or secrets.
+   - **Reviews are always read-only, including their fallbacks.** Dispatch every review (and any
+     fallback that stands in for a review) with `--read-only`, even when the fallback lane can
+     normally write.
    Real findings → a delta card to the implementer (max 2 rounds). You decide what's real: ignore
    opinions that contradict the plan, and say so. If no review job is configured, review the diff
    yourself. Either way, you still check these yourself:

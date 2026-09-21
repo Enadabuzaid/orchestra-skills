@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# Add scoped Antigravity headless permissions for one project folder.
+# Let Antigravity (agy) write files in a folder during headless delegated runs.
+#
+#   scripts/agy-allow.sh ~/Code/my-project            # allow writes in that folder (recursive)
+#   scripts/agy-allow.sh ~/Code/my-project --tests "php artisan test"   # also allow a test command
+#
+# Why: headless `agy --print` cannot ask you for permission, so writes are auto-denied unless
+# a rule allows them. This adds *scoped* rules (one folder, one command pattern) instead of
+# --dangerously-skip-permissions, which would approve every tool everywhere.
+#
+# Antigravity has read rules from two files across versions/platforms; every one that exists is
+# updated, each with a timestamped backup next to it.
 set -euo pipefail
 
-usage() {
-  echo "Usage: scripts/agy-allow.sh <project-folder> [--tests \"<command>\"]"
-}
+usage() { sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; }
 [ $# -ge 1 ] || { usage; exit 1; }
 DIR="$(cd "$1" && pwd -P)"; shift
 CMD=""

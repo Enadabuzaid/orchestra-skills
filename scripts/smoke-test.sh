@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Smoke-test every delegation lane against a throwaway git repo.
+#
+#   scripts/smoke-test.sh                 # all lanes in your lane config
+#   scripts/smoke-test.sh backend small   # only these lanes
+#
+# Each lane gets its own temp repo with math.js + a node:test file.
+#  - write lanes must add multiply(), keep `node --test` green, touch no other file, and NOT commit.
+#  - read-only lanes (readOnly: true) must answer and change nothing.
+# Lanes run in parallel (copilot lanes run last). Nothing outside the temp dirs is touched.
 set -uo pipefail
 
 SKILLS_DIR="${SKILLS_DIR:-$HOME/.claude/skills}"
@@ -74,6 +82,7 @@ EOF
   fi
 
   local start=$SECONDS
+  # Claude lanes use your claude.ai subscription, not an API key (set ORCHESTRA_USE_API_KEY=1 to keep it).
   local unset_key=(); [ "$impl" = "claude" ] && [ -z "${ORCHESTRA_USE_API_KEY:-}" ] && unset_key=(-u ANTHROPIC_API_KEY)
   env ${unset_key[@]+"${unset_key[@]}"} node "$relay" --lane "$lane" --brief "$brief" --cd "$dir" --timeout "$TIMEOUT" --out-dir "$WORK/$lane.run" >"$out" 2>&1
   local secs=$((SECONDS - start))
@@ -109,6 +118,8 @@ EOF
 echo "Smoke-testing lanes: ${LANES[*]}"
 echo "Work dir: $WORK (timeout per lane: $TIMEOUT)"
 echo
+# Copilot's startup version check has a hard 10s limit that it can miss under heavy
+# parallel load, so copilot lanes run after the others finish.
 LATE=()
 for lane in "${LANES[@]}"; do
   if [ "$(lane_field "$lane" implementer)" = "copilot" ]; then LATE+=("$lane"); else run_lane "$lane" & fi

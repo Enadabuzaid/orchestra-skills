@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Installs orchestra-skills into Claude Code and Codex by symlinking this checkout.
-# Safe to re-run: existing orchestra links are reused; conflicting files are backed up first.
+# Installs orchestra-skills into Claude Code and Codex by symlinking this checkout, so `git pull`
+# here updates everything. Safe to re-run: existing orchestra links are reused; anything in the way
+# is backed up first to ~/.config/orchestra-skills/backups/<time>/ (outside the skill folders).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
 STAMP="$(date +%Y%m%d%H%M%S).$$"
+# Backups live OUTSIDE ~/.claude and ~/.codex: a backed-up skill folder left next to the new link
+# (with its SKILL.md inside) would be loaded as a second, duplicate skill.
+BACKUP_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}/orchestra-skills/backups/$STAMP"
 
 need_node() {
   if ! command -v node >/dev/null 2>&1; then
@@ -21,9 +25,16 @@ need_node() {
   fi
 }
 
-backup_target() {
+backup_path() {  # where a file or folder is kept: mirrors its path under $HOME
+  local target="$1" rel
+  case "$target" in "$HOME"/*) rel="${target#"$HOME"/}" ;; *) rel="${target#/}" ;; esac
+  printf '%s/%s' "$BACKUP_ROOT" "$rel"
+}
+
+backup_target() {  # moves a conflicting file/folder/link out of the way
   local target="$1" backup
-  backup="${target}.orchestra-backup.${STAMP}"
+  backup="$(backup_path "$target")"
+  mkdir -p "$(dirname "$backup")"
   mv "$target" "$backup"
   echo "Backed up existing $target -> $backup"
 }
@@ -72,8 +83,10 @@ JS
   fi
 
   if [ -s "$file" ]; then
-    cp "$file" "${file}.orchestra-backup.${STAMP}"
-    echo "Backed up existing $file -> ${file}.orchestra-backup.${STAMP}"
+    local backup; backup="$(backup_path "$file")"
+    mkdir -p "$(dirname "$backup")"
+    cp "$file" "$backup"
+    echo "Backed up existing $file -> $backup"
   fi
   cat "$tmp" > "$file"
   rm -f "$tmp"

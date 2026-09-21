@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
-# Show which quota paid for each delegated run.
+# Show which quota paid for each delegated run, so you can see what stayed off your Claude budget.
+#
+#   scripts/token-report.sh                 # every orchestrate run found on this machine
+#   scripts/token-report.sh home-visit      # only runs for that project (repo folder name)
+#   scripts/token-report.sh <run-dir> ...   # specific dirs passed to relay --out-dir
+#
+# Reads result.json + events.jsonl from each run. Changes nothing.
 set -uo pipefail
+# Arrays below use the ${a[@]+"${a[@]}"} form: macOS ships bash 3.2, where "${a[@]}" on an empty
+# array is an "unbound variable" error under set -u.
 
 if [ $# -eq 0 ] || { [ $# -eq 1 ] && [ ! -d "$1" ]; }; then
-  proj="${1:-*}"; shopt -s nullglob
+  name="${1:-}"; proj="${1:-*}"; shopt -s nullglob
   candidates=( "${TMPDIR:-/tmp}"/orchestrate/$proj/*/run /tmp/orchestrate/$proj/*/run )
   runs=()
-  for d in "${candidates[@]}"; do
+  for d in ${candidates[@]+"${candidates[@]}"}; do
     [ -d "$d" ] || continue
     canon="$(cd "$d" 2>/dev/null && pwd -P)" || continue
     seen=0
-    for existing in "${runs[@]}"; do [ "$existing" = "$canon" ] && seen=1 && break; done
+    for existing in ${runs[@]+"${runs[@]}"}; do [ "$existing" = "$canon" ] && seen=1 && break; done
     [ "$seen" -eq 0 ] && runs+=("$canon")
   done
-  [ ${#runs[@]} -gt 0 ] || { echo "No orchestrate runs found${proj:+ for $proj}."; exit 1; }
+  [ ${#runs[@]} -gt 0 ] || { echo "No orchestrate runs found${name:+ for $name}."; exit 1; }
   set -- "${runs[@]}"
 fi
 

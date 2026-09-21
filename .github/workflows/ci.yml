@@ -11,7 +11,13 @@ permissions:
 
 jobs:
   self-test:
-    runs-on: ubuntu-latest
+    # macOS matters: users run these scripts on the system bash 3.2, which fails on things
+    # bash 5 on Linux accepts (e.g. empty arrays under set -u).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

@@ -64,6 +64,11 @@ for (const [n, l] of entries) {
 JS
 )"
   lane_status=$?
+  VALIDATE="$CLAUDE_DIR/skills/delegate-setup/scripts/config.mjs"
+  if [ "$lane_status" -eq 0 ] && [ -f "$VALIDATE" ]; then
+    # delegate-setup's validator also checks which settings each tool accepts, exactly as the relays do.
+    if ! v_err="$(node "$VALIDATE" validate "$CONFIG" 2>&1 >/dev/null)"; then lane_output="$v_err"; lane_status=2; fi
+  fi
   if [ "$lane_status" -eq 0 ]; then
     printf '%s\n' "$lane_output"
     CONFIG_VALID=1
@@ -80,9 +85,19 @@ elif [ -n "${ORCHESTRA_USE_API_KEY:-}" ]; then
   [ -n "${ANTHROPIC_API_KEY:-}" ] && pass "Claude lanes explicitly configured to use ANTHROPIC_API_KEY" || fail "ORCHESTRA_USE_API_KEY is set but ANTHROPIC_API_KEY is empty"
 else
   auth_json="$(env -u ANTHROPIC_API_KEY claude auth status 2>/dev/null || true)"
-  auth_method="$(printf '%s' "$auth_json" | node -e 'try{const a=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(a.authMethod||"")}catch{}' 2>/dev/null || true)"
-  if [ -n "$auth_method" ]; then pass "Claude subscription login ($auth_method)"; else fail "Claude subscription auth not detected: run claude and log in"; fi
-  if [ -n "${ANTHROPIC_API_KEY:-}" ]; then warn "ANTHROPIC_API_KEY is set in this shell; orchestra strips it from Claude lane/gate runs unless ORCHESTRA_USE_API_KEY=1"; fi
+  # Logged out still reports an authMethod ("none"), so require loggedIn === true.
+  auth_method="$(printf '%s' "$auth_json" | node -e 'try{const a=JSON.parse(require("fs").readFileSync(0,"utf8"));if(a.loggedIn===true&&a.authMethod&&a.authMethod!=="none")process.stdout.write(String(a.authMethod))}catch{}' 2>/dev/null || true)"
+  if [ -n "$auth_method" ]; then pass "Claude subscription login ($auth_method)"; else fail "Claude is not logged in with a subscription: run claude, then /login"; fi
+  if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    # The scripts and lanes strip the key, but the main Claude Code session (and the plan-reviewer,
+    # lane-runner and completion-auditor subagents inside it) only does so through a shell wrapper.
+    if grep -qs 'env -u ANTHROPIC_API_KEY command claude' ~/.zshrc ~/.bashrc ~/.bash_profile ~/.config/fish/config.fish; then
+      pass "ANTHROPIC_API_KEY is set, but your claude() wrapper keeps Claude Code on the subscription"
+    else
+      warn "ANTHROPIC_API_KEY is set: lanes/scripts ignore it, but your main Claude Code session (and its subagents) will bill it."
+      warn "  Fix: add  claude() { env -u ANTHROPIC_API_KEY command claude \"\$@\"; }  to ~/.zshrc (or set ORCHESTRA_USE_API_KEY=1 if you want API billing)"
+    fi
+  fi
 fi
 
 printf '%s\n' "Implementer CLIs used by active lanes"

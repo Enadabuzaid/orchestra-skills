@@ -30,6 +30,24 @@ if [ ! -f "$LANES" ]; then
   echo "Wrote default lanes to $LANES"
 fi
 
+# Codex app / CLI: the portable workflow (Codex has skills but no Claude Code subagents).
+CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
+if [ -d "$CODEX_DIR" ]; then
+  mkdir -p "$CODEX_DIR/skills"
+  ln -sfn "$ROOT/skills/orchestrate-portable" "$CODEX_DIR/skills/orchestrate-portable"
+  touch "$CODEX_DIR/AGENTS.md"
+  node -e '
+    const fs = require("fs");
+    const [file, snippetFile, start, end] = process.argv.slice(1);
+    let md = fs.readFileSync(file, "utf8");
+    const block = `${start}\n${fs.readFileSync(snippetFile, "utf8").trim()}\n${end}`;
+    const re = new RegExp(`${start}[\\s\\S]*?${end}`);
+    md = re.test(md) ? md.replace(re, block) : (md.trimEnd() ? md.trimEnd() + "\n\n" : "") + block;
+    fs.writeFileSync(file, md + "\n");
+  ' "$CODEX_DIR/AGENTS.md" "$ROOT/CODEX.snippet.md" "$START" "$END"
+  echo "Codex: linked orchestrate-portable into $CODEX_DIR/skills and updated $CODEX_DIR/AGENTS.md"
+fi
+
 echo "Installed. Implementer skills come from delegate-skills:"
 echo "  npx skills add amElnagdy/delegate-skills --global --agent claude-code -y \\"
 echo "    --skill codex-delegate --skill agy-delegate --skill claude-delegate --skill copilot-delegate --skill delegate-setup"

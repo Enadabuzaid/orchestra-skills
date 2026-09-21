@@ -5,6 +5,8 @@
 #
 #   scripts/e2e-test.sh            # uses the ui lane (Antigravity) for the renderer task
 #   scripts/e2e-test.sh --no-ui    # sends the renderer task to backend instead (no Antigravity needed)
+#   scripts/e2e-test.sh --codex    # Codex (gpt-6-astra) is the orchestrator, using orchestrate-portable:
+#                                  # Claude gates via the plan-gate / done-gate lanes
 #
 # Everything happens in a throwaway git repo under $TMPDIR. Takes ~10-25 minutes and uses real
 # quota: Opus for planning and the gates, plus Codex / Antigravity / Sonnet for the coding.
@@ -12,7 +14,8 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-UI_LANE="ui"; [ "${1:-}" = "--no-ui" ] && UI_LANE="backend"
+UI_LANE="ui"; ORCH="claude"
+for a in "$@"; do case "$a" in --no-ui) UI_LANE="backend" ;; --codex) ORCH="codex" ;; esac; done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/orchestra-e2e.XXXXXX")"; WORK="$(cd "$WORK" && pwd -P)"
 REPO="$WORK/e2e-demo-${WORK##*.}"; LOG="$WORK/claude.json"   # unique name: relay run dirs are named after it
 MODEL="${E2E_MODEL:-opus}"
@@ -30,8 +33,9 @@ git init -q && git add -A && git -c user.name=e2e -c user.email=e2e@example.com 
 BASE="$(git rev-parse --short HEAD)"; echo "  base commit $BASE"
 if [ "$UI_LANE" = "ui" ]; then "$ROOT/scripts/agy-allow.sh" "$REPO" --tests "node" | sed 's/^/  /'; fi
 
-step "3. Unattended orchestrate run (model: $MODEL, ui task → $UI_LANE lane)"
-PROMPT="Use the orchestrate skill to implement this feature in the current repo ($REPO). This is an
+step "3. Unattended orchestrate run (orchestrator: $ORCH, ui task → $UI_LANE lane)"
+SKILL_NAME="orchestrate"; [ "$ORCH" = "codex" ] && SKILL_NAME="orchestrate-portable"
+PROMPT="Use the $SKILL_NAME skill to implement this feature in the current repo ($REPO). This is an
 unattended, headless test (claude -p): never ask questions, make sensible decisions yourself, and only
 touch files inside $REPO. Your process exits as soon as you end your reply, which kills any background
 job, so never end your reply until the completion-auditor has given its final verdict.
@@ -46,7 +50,7 @@ Feature: todos can have due dates.
   with T1.
 - T3 (lane small): README.md documenting the API, after T1 and T2.
 
-Follow every stage, including the Opus plan-reviewer gate and the Opus completion-auditor loop. The plan
+Follow every stage, including both gates (plan approval before any code; the done check loop at the end). The plan
 needs a Definition of Done and Verify commands (node --test and a node -e runtime check).
 As the very last line of your reply, print exactly one of:
 E2E-RESULT: DONE
@@ -54,8 +58,16 @@ E2E-RESULT: GAPS"
 START=$SECONDS
 # Use the claude.ai subscription, not an API key (set ORCHESTRA_USE_API_KEY=1 to keep the key).
 UNSET_KEY=(-u ANTHROPIC_API_KEY); [ -n "${ORCHESTRA_USE_API_KEY:-}" ] && UNSET_KEY=()
-env -u CLAUDECODE ${UNSET_KEY[@]+"${UNSET_KEY[@]}"} claude -p "$PROMPT" --model "$MODEL" --output-format json \
-  --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Agent,Task,Skill" > "$LOG" 2>"$WORK/claude.err"
+if [ "$ORCH" = "codex" ]; then
+  # The orchestrating Codex must start relays that reach the network and write CLI session files,
+  # so it needs full access. This only runs against the throwaway repo above.
+  env ${UNSET_KEY[@]+"${UNSET_KEY[@]}"} codex exec -m "${E2E_CODEX_MODEL:-gpt-6-astra}" -C "$REPO" -s danger-full-access \
+    -o "$WORK/last-message.txt" "$PROMPT" > "$WORK/codex.log" 2>&1
+  node -e 'const fs=require("fs");const m=fs.existsSync(process.argv[2])?fs.readFileSync(process.argv[2],"utf8"):"";fs.writeFileSync(process.argv[1],JSON.stringify({result:m}))' "$LOG" "$WORK/last-message.txt"
+else
+  env -u CLAUDECODE ${UNSET_KEY[@]+"${UNSET_KEY[@]}"} claude -p "$PROMPT" --model "$MODEL" --output-format json \
+    --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Agent,Task,Skill" > "$LOG" 2>"$WORK/claude.err"
+fi
 echo "  finished in $(( (SECONDS - START) / 60 ))m $(( (SECONDS - START) % 60 ))s (log: $LOG)"
 
 if node -e "process.exit(/API Error|usage limit|rate limit/i.test(require('$LOG').result||'')?0:1)" 2>/dev/null; then

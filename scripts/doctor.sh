@@ -19,6 +19,11 @@ for a in plan-reviewer diff-reviewer completion-auditor lane-runner; do
 done
 grep -q "^## Orchestration (token budget)" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null && pass "CLAUDE.md rules" || fail "CLAUDE.md rules missing: run ./install.sh"
 
+CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
+if [ -d "$CODEX_DIR" ]; then
+  [ -f "$CODEX_DIR/skills/orchestrate-portable/SKILL.md" ] && pass "Codex: orchestrate-portable skill" || fail "Codex: orchestrate-portable missing: run ./install.sh"
+fi
+
 echo "delegate-skills"
 for s in delegate-setup codex-delegate agy-delegate claude-delegate copilot-delegate; do
   [ -f "$CLAUDE_DIR/skills/$s/SKILL.md" ] && pass "$s" || fail "$s missing (see README install step 1)"

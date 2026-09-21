@@ -94,6 +94,7 @@ built and how it was verified. You review `git log` and push.
 ## Docs
 
 - **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. "I opened Claude Code, what now?" in one page
+- **[docs/CODEX.md](docs/CODEX.md)**: run everything from the **Codex app** (Astra plans, Claude Fable/Opus check, lanes build)
 - **[docs/LANES.md](docs/LANES.md)**: change who does what (backend, ui, checkers, "Codex hit its limit"), one command each
 - **[docs/EXAMPLE.md](docs/EXAMPLE.md)**: a real example ("make sure patient login and register work"): where to type, what you'll see at each step, and who pays
 - **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide, from install and first feature to lanes,
@@ -105,6 +106,7 @@ built and how it was verified. You review `git log` and push.
 
 | Path | Purpose |
 |---|---|
+| `skills/orchestrate-portable/` | The same workflow for the Codex app and other tools without Claude subagents |
 | `skills/orchestrate/` | The 8-stage workflow skill plus the plan and brief templates |
 | `agents/plan-reviewer.md` | Opus plan gate: `APPROVE` or numbered fixes |
 | `agents/diff-reviewer.md` | Sonnet per-task reviewer: `PASS` / `FAIL` |

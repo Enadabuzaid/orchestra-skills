@@ -395,12 +395,6 @@ You can also delegate a single task directly:
 
 ## 13. Using other apps as the orchestrator (Codex app, Cursor, …)
 
-- **The coding lanes are portable.** delegate-skills relays are plain Node scripts. You can install
-  them for Codex (`npx skills add amElnagdy/delegate-skills --agent codex`), and Codex can send work
-  to Claude, Antigravity and the rest the same way.
-- **The orchestrate workflow is Claude Code-specific today.** Its approval and done checks are Claude
-  Code *subagents* (`~/.claude/agents/*.md`): `plan-reviewer`, `lane-runner` and
-  `completion-auditor`. Codex has skills but no subagents, so it can't run those checks as they are.
-- **So:** run orchestrate from **Claude Code**, and let Codex, Antigravity and Sonnet do the coding
-  from there. That's the tested setup. A "portable mode", where any app runs the Opus checks through
-  `claude-delegate --read-only --model opus`, is possible, but it isn't built or tested yet.
+Use the **`orchestrate-portable`** skill. `install.sh` links it into `~/.codex/skills`. Your session
+plans (for example GPT-6 Astra in Codex), and Claude does the two checks read-only through the
+`plan-gate` and `done-gate` lanes. Step by step: **[CODEX.md](CODEX.md)**.

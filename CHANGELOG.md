@@ -3,6 +3,19 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
+## [0.4.0] - 2026-09-21
+
+### Added
+- **`orchestrate-portable` skill**: the workflow for the Codex app/CLI and other tools without
+  Claude Code subagents. The session plans (e.g. GPT-6 Astra); Claude approves the plan and decides
+  DONE through the read-only **`plan-gate`** and **`done-gate`** lanes. For the done check,
+  Codex runs the Verify commands and Claude reads the output, diff and status.
+- `install.sh` links it into `~/.codex/skills` and adds rules to `~/.codex/AGENTS.md`.
+- `examples/lanes-codex-orchestrator.json`: plan-gate → Fable, done-gate → Opus, backend → Codex
+  GPT-5.6-Luna, ui → Codex, ui-check → Antigravity.
+- `scripts/e2e-test.sh --codex`: the end-to-end test with Codex as the orchestrator.
+- `docs/CODEX.md`.
+
 ## [0.3.1] - 2026-09-21
 
 ### Added

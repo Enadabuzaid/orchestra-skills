@@ -22,6 +22,9 @@ You're given: the plan path, the repo path, and which task IDs to run (for examp
    `node ~/.claude/skills/<implementer>-delegate/scripts/relay.mjs --lane <lane> --brief <brief> --cd <repo> --out-dir ${TMPDIR:-/tmp}/orchestrate/<repo-name>/<task-id>/run --timeout 45m`
    (implementer by lane: `complex`/`backend`/`plan-check` → codex, `ui` → agy,
    `small`/`fallback` → claude, `copilot-review` → copilot).
+   - Claude lanes (`small`/`fallback`): prefix the command with `env -u ANTHROPIC_API_KEY`, so the
+     run uses the user's claude.ai subscription and not an API key that may be limited (unless the
+     user said to use the key).
    - Tasks the plan marks as parallel (disjoint files): start them together in **one** Bash call:
      `relayA & relayB & wait`.
    - **Never end your turn while a relay is running.** If a call would take longer than 10 minutes,

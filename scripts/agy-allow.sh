@@ -69,4 +69,4 @@ if [ "$found" -eq 0 ]; then
   exit 1
 fi
 
-echo "Done. Added scoped rules for $DIR. Verify them with scripts/smoke-test.sh ui."
+echo "Done. Added scoped rules for $DIR. Verify them with scripts/smoke-test.sh frontend."

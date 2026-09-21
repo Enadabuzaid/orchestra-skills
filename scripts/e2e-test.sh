@@ -4,7 +4,7 @@
 # own report.
 #
 #   scripts/e2e-test.sh            # uses the ui lane (Antigravity) for the renderer task
-#   scripts/e2e-test.sh --no-ui    # sends the renderer task to backend instead (no Antigravity needed)
+#   scripts/e2e-test.sh --no-ui    # sends the renderer task to the backend job instead
 #   scripts/e2e-test.sh --codex    # Codex (gpt-6-astra) is the orchestrator, using orchestrate-portable:
 #                                  # Claude gates via the plan-gate / done-gate lanes
 #
@@ -14,7 +14,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-UI_LANE="ui"; ORCH="claude"
+UI_LANE="frontend"; ORCH="claude"
 for a in "$@"; do case "$a" in --no-ui) UI_LANE="backend" ;; --codex) ORCH="codex" ;; esac; done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/orchestra-e2e.XXXXXX")"; WORK="$(cd "$WORK" && pwd -P)"
 REPO="$WORK/e2e-demo-${WORK##*.}"; LOG="$WORK/claude.json"   # unique name: relay run dirs are named after it
@@ -42,16 +42,18 @@ job, so never end your reply until the completion-auditor has given its final ve
 Commit with plain messages and no Co-Authored-By trailer.
 
 Feature: todos can have due dates.
-- T1 (lane backend): add(title, { due }) where due is optional YYYY-MM-DD (null/undefined → null; reject
+- T1 (job backend): add(title, { due }) where due is optional YYYY-MM-DD (null/undefined → null; reject
   invalid or impossible dates such as 2026-02-30 with 'invalid due date'), and overdue(today) that returns
   open todos with due < today, ordered by due then id.
-- T2 (lane $UI_LANE): render.js exporting renderTodos(todos, today), which returns an HTML string with
+- T2 (job $UI_LANE): render.js exporting renderTodos(todos, today), which returns an HTML string with
   done/overdue classes and escaped titles, plus render.test.js and a static index.html. Runs in parallel
   with T1.
-- T3 (lane small): README.md documenting the API, after T1 and T2.
+- T3 (job docs): README.md documenting the API, after T1 and T2.
 
-Follow every stage, including both gates (plan approval before any code; the done check loop at the end). The plan
-needs a Definition of Done and Verify commands (node --test and a node -e runtime check).
+Follow the skill exactly: route the request, get the plan from the planner lane (with the
+architecture review if the route requires it), build with task cards, and finish with the final
+audit loop. The plan needs a Definition of Done and Verify commands (node --test and a node -e
+runtime check).
 As the very last line of your reply, print exactly one of:
 E2E-RESULT: DONE
 E2E-RESULT: GAPS"

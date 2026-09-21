@@ -264,6 +264,8 @@ The plan says which lane each task uses. Rough rules:
 
 ## 9. Changing lanes and models
 
+> **Short version:** use `scripts/lanes.sh`. Every command is in **[LANES.md](LANES.md)**.
+
 Three ways, from easiest to most manual:
 
 1. **Ask Claude:** *"Use delegate-setup to change the ui lane to gemini-3.1-pro-high."* It shows you

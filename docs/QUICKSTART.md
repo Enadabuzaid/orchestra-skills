@@ -78,15 +78,15 @@ Do the manual check it gives you (usually "open this page and click this"), look
 
 ## Change who does what
 
-Ask Claude: *"Use delegate-setup to move the ui lane to codex"*. Or switch to a ready-made map:
-
 ```bash
-node ~/.claude/skills/delegate-setup/scripts/config.mjs write --scope global ~/orchestra-skills/examples/lanes-codex-frontend.json
-~/orchestra-skills/scripts/smoke-test.sh     # confirm
+~/orchestra-skills/scripts/lanes.sh                                   # show
+~/orchestra-skills/scripts/lanes.sh set backend codex                 # backend → Codex
+~/orchestra-skills/scripts/lanes.sh set ui agy                        # frontend → Antigravity
+~/orchestra-skills/scripts/lanes.sh replace codex claude model=sonnet # Codex hit its limit
+~/orchestra-skills/scripts/lanes.sh undo                              # back to the previous setup
 ```
 
-Add a `<lane>-check` lane (read-only) to have a second tool review that lane's work before commit.
-Details: [GUIDE §9](GUIDE.md#9-changing-lanes-and-models).
+Every change with examples: **[LANES.md](LANES.md)**.
 
 ## Where did the tokens go?
 

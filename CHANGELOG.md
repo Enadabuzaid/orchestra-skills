@@ -3,6 +3,14 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
+## [0.3.1] - 2026-09-21
+
+### Added
+- `scripts/lanes.sh`: change lanes with one command: `set`, `remove`, `replace <tool> <tool>` (for
+  when a tool hits its quota), `use <preset>`, `presets`, `models <tool>`, `undo`. Every change is
+  validated and backed up.
+- `docs/LANES.md`: every common change with its exact command.
+
 ## [0.3.0] - 2026-09-21
 
 ### Added

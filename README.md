@@ -94,6 +94,7 @@ built and how it was verified. You review `git log` and push.
 ## Docs
 
 - **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: start here. "I opened Claude Code, what now?" in one page
+- **[docs/LANES.md](docs/LANES.md)**: change who does what (backend, ui, checkers, "Codex hit its limit"), one command each
 - **[docs/EXAMPLE.md](docs/EXAMPLE.md)**: a real example ("make sure patient login and register work"): where to type, what you'll see at each step, and who pays
 - **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide, from install and first feature to lanes,
   models, permissions and token savings
@@ -113,6 +114,7 @@ built and how it was verified. You review `git log` and push.
 | `examples/lanes.json` | The default lane map |
 | `examples/demo-app/` | A tiny app for the end-to-end test |
 | `install.sh` | Links everything into `~/.claude` (safe to re-run) |
+| `scripts/lanes.sh` | Change lanes: show / set / remove / replace / use preset / undo |
 | `scripts/doctor.sh` | Checks the setup (changes nothing) |
 | `scripts/smoke-test.sh` | Real test of every lane |
 | `scripts/agy-allow.sh` | Scoped Antigravity write permission for a folder |

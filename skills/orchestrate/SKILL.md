@@ -12,7 +12,7 @@ license: MIT
 metadata:
   author: Enad Abuzaid
   homepage: https://github.com/Enadabuzaid/orchestra-skills
-  version: 0.3.0
+  version: 0.3.1
   requires: amElnagdy/delegate-skills (codex-delegate, agy-delegate, claude-delegate, copilot-delegate, delegate-setup)
 ---
 

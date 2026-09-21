@@ -7,3 +7,4 @@
 - After `APPROVE`, hand the plan to the `lane-runner` subagent (Sonnet): it writes the briefs, dispatches the lanes, reviews the diffs and commits. Read only its run report; don't coordinate on Opus.
 - Plans must have a Definition of Done and Verify commands. A feature is finished only when the `completion-auditor` subagent (Opus) returns `DONE`. Gaps become new tasks, and the loop repeats (max 3 rounds, then escalate to the user).
 - Never tell the user a feature is finished without the auditor's `DONE` and the verify results.
+- To change lanes when the user asks ("backend to codex", "codex hit its limit"), use `~/orchestra-skills/scripts/lanes.sh` (set / remove / replace / use / undo) and show them the result.

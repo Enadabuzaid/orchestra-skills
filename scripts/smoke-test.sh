@@ -5,7 +5,7 @@
 #   scripts/smoke-test.sh backend small   # only these lanes
 #
 # Each lane gets its own temp repo with math.js + a node:test file.
-#  - write lanes must add multiply(), keep `node --test` green, and NOT commit.
+#  - write lanes must add multiply(), keep `node --test` green, touch no other file, and NOT commit.
 #  - read-only lanes (readOnly: true) must answer and change nothing.
 # Lanes run in parallel (copilot lanes run last). Nothing outside the temp dirs is touched.
 set -uo pipefail
@@ -48,7 +48,7 @@ EOF
 }
 
 run_lane() {
-  local lane="$1" impl ro dir out brief result status verdict=FAIL reason=""
+  local lane="$1" impl ro dir out brief result status verdict=FAIL reason="" ro_violation="" unexpected=""
   impl="$(lane_field "$lane" implementer)"
   ro="$(lane_field "$lane" readOnly)"
   dir="$WORK/$lane"; out="$WORK/$lane.out"; brief="$WORK/$lane.brief.md"
@@ -88,25 +88,29 @@ EOF
   local secs=$((SECONDS - start))
   result="$WORK/$lane.run/result.json"
   status="$(node -e 'try{process.stdout.write(require(process.argv[1]).status||"")}catch{process.stdout.write("no-result")}' "$result")"
+  ro_violation="$(node -e 'try{const v=require(process.argv[1]).readOnlyViolation;process.stdout.write(v===true?"true":v===false?"false":"unknown")}catch{process.stdout.write("unknown")}' "$result")"
 
   cd "$dir" || return
   local commits changed
   commits="$(git rev-list --count HEAD)"
   changed="$(git status --porcelain | wc -l | tr -d ' ')"
+  unexpected="$(git status --porcelain | sed -E 's/^.. //' | grep -Ev '^(math\.js|math\.test\.js)$' || true)"
 
   if [ "$status" != "completed" ] && grep -qiE "quota|rate.?limit|usage limit|402|429" "$WORK/$lane.run"/*.jsonl "$WORK/$lane.run"/stderr.txt "$out" 2>/dev/null; then
     reason="$impl quota or rate limit reached; the setup is fine, retry after it resets (see $out)"
   elif [ "$status" != "completed" ]; then reason="relay status: $status (see $out)"
   elif [ "$commits" != "1" ]; then reason="implementer committed (must not)"
   elif [ "$ro" = "true" ]; then
-    if [ "$changed" != "0" ]; then reason="read-only lane changed files"
+    if [ "$ro_violation" = "true" ]; then reason="relay detected a read-only violation"
+    elif [ "$changed" != "0" ]; then reason="read-only lane changed files"
     elif ! node -e 'process.exit(/add/.test(require(process.argv[1]).finalMessage||"")?0:1)' "$result"; then reason="answer did not mention add"
     else verdict=PASS; reason="answered, no changes"; fi
   else
-    if ! grep -q "multiply" math.js; then reason="multiply() not added"
+    if [ -n "$unexpected" ]; then reason="changed file(s) outside brief: $(printf '%s' "$unexpected" | tr '\n' ' ')"
+    elif ! grep -q "multiply" math.js; then reason="multiply() not added"
     elif ! node --test >/dev/null 2>&1; then reason="node --test fails"
     elif ! grep -q "multiply" math.test.js; then reason="no multiply test"
-    else verdict=PASS; reason="multiply added, tests green, not committed"; fi
+    else verdict=PASS; reason="multiply added, tests green, scope clean, not committed"; fi
   fi
   echo "$lane|$impl|$verdict|$reason (${secs}s)" > "$WORK/$lane.row"
 }
@@ -121,7 +125,7 @@ for lane in "${LANES[@]}"; do
   if [ "$(lane_field "$lane" implementer)" = "copilot" ]; then LATE+=("$lane"); else run_lane "$lane" & fi
 done
 wait
-for lane in "${LATE[@]+"${LATE[@]}"}"; do run_lane "$lane"; done
+for lane in ${LATE[@]+"${LATE[@]}"}; do run_lane "$lane"; done
 
 fails=0
 printf '%-15s %-8s %-6s %s\n' LANE TOOL RESULT DETAIL

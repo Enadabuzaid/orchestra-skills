@@ -7,11 +7,22 @@
 #
 # Reads result.json + events.jsonl from each run. Changes nothing.
 set -uo pipefail
-# No args or a project name → look in both temp locations orchestrate uses.
+# Arrays below use the ${a[@]+"${a[@]}"} form: macOS ships bash 3.2, where "${a[@]}" on an empty
+# array is an "unbound variable" error under set -u.
+
 if [ $# -eq 0 ] || { [ $# -eq 1 ] && [ ! -d "$1" ]; }; then
-  proj="${1:-*}"; shopt -s nullglob
-  set -- "${TMPDIR:-/tmp}"/orchestrate/$proj/*/run /tmp/orchestrate/$proj/*/run
-  [ $# -gt 0 ] || { echo "No orchestrate runs found${1:+ for $proj}."; exit 1; }
+  name="${1:-}"; proj="${1:-*}"; shopt -s nullglob
+  candidates=( "${TMPDIR:-/tmp}"/orchestrate/$proj/*/run /tmp/orchestrate/$proj/*/run )
+  runs=()
+  for d in ${candidates[@]+"${candidates[@]}"}; do
+    [ -d "$d" ] || continue
+    canon="$(cd "$d" 2>/dev/null && pwd -P)" || continue
+    seen=0
+    for existing in ${runs[@]+"${runs[@]}"}; do [ "$existing" = "$canon" ] && seen=1 && break; done
+    [ "$seen" -eq 0 ] && runs+=("$canon")
+  done
+  [ ${#runs[@]} -gt 0 ] || { echo "No orchestrate runs found${name:+ for $name}."; exit 1; }
+  set -- "${runs[@]}"
 fi
 
 node - "$@" <<'JS'
@@ -24,7 +35,7 @@ for (const dir of process.argv.slice(2)) {
   const resFile = path.join(dir, "result.json");
   if (!fs.existsSync(resFile)) continue;
   const r = JSON.parse(fs.readFileSync(resFile, "utf8"));
-  const tool = r.tool || (r.codexVersion ? "codex" : r.agyVersion ? "agy" : r.copilotVersion ? "copilot" : "claude");
+  const tool = r.tool || (r.codexVersion ? "codex" : r.agyVersion ? "agy" : r.copilotVersion ? "copilot" : r.claudeVersion ? "claude" : "unknown");
   let input = null, output = null, cost = null;
   const events = path.join(dir, "events.jsonl");
   const lines = fs.existsSync(events) ? fs.readFileSync(events, "utf8").split("\n").filter(Boolean) : [];
@@ -54,8 +65,8 @@ for (const x of rows) {
   console.log(pad(x.run.slice(0, 13), 14) + pad(x.lane, 10) + pad(x.tool, 8) + pad(String(x.model).slice(0, 21), 22) + pad(x.status, 11) +
     pad(num(x.input), 12) + pad(typeof x.output === "string" ? x.output : num(x.output), 9) + pad(x.cost == null ? "–" : "$" + x.cost.toFixed(3), 8) + x.quota);
 }
-const offClaude = rows.filter((x) => x.tool !== "claude").length;
+const offClaude = rows.filter((x) => x.tool !== "claude" && x.tool !== "unknown").length;
 const claudeCost = rows.filter((x) => x.cost != null).reduce((a, x) => a + x.cost, 0);
-console.log(`\n${offClaude}/${rows.length} runs used a non-Claude quota. Claude lane spend: $${claudeCost.toFixed(3)} (Sonnet).`);
+console.log(`\n${offClaude}/${rows.length} runs used a known non-Claude quota. Claude lane spend: $${claudeCost.toFixed(3)} (Sonnet).`);
 console.log("\"–\" means that CLI doesn't report the number. Antigravity keeps usage in its own account.");
 JS

@@ -38,7 +38,7 @@ for (const dir of process.argv.slice(2)) {
     input = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
     output = u.output_tokens;
   }
-  rows.push({ run: path.basename(dir), lane: r.lane || "–", tool, model: r.model || "default", status: r.status, input, output, cost, quota: quota[tool] || "?" });
+  rows.push({ run: path.basename(dir) === "run" ? path.basename(path.dirname(dir)) : path.basename(dir), lane: r.lane || "–", tool, model: r.model || "default", status: r.status, input, output, cost, quota: quota[tool] || "?" });
 }
 
 if (!rows.length) { console.log("No result.json found in the given dirs."); process.exit(1); }

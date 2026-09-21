@@ -19,7 +19,7 @@ a task needs them, sends each one a brief, and collects the result. You only tal
 |---|---|---|
 | **Claude Code** (Max subscription) | **Yes, this is where you work** | Plans (Opus), runs the checks (Opus), coordinates (Sonnet) |
 | Codex (ChatGPT subscription) | No | Called automatically for `backend` / `complex` tasks |
-| Antigravity | No | Called automatically for `ui` tasks |
+| Antigravity | No | Called automatically for `frontend` tasks |
 | Copilot | No | Optional read-only reviewer |
 
 ## Before you start (once per project)

@@ -22,7 +22,7 @@ if command -v claude >/dev/null 2>&1; then HAVE_CLAUDE=1; pass "claude"; else fa
 
 printf '%s\n' "orchestra-skills"
 [ -f "$CLAUDE_DIR/skills/orchestrate/SKILL.md" ] && pass "orchestrate skill" || fail "orchestrate skill missing: run ./install.sh"
-for a in plan-reviewer diff-reviewer completion-auditor lane-runner; do
+for a in task-router plan-reviewer diff-reviewer completion-auditor lane-runner; do
   [ -f "$CLAUDE_DIR/agents/$a.md" ] && pass "$a agent" || fail "$a agent missing: run ./install.sh"
 done
 grep -q "^## Orchestration (token budget)" "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null && pass "CLAUDE.md rules" || fail "CLAUDE.md rules missing: run ./install.sh"

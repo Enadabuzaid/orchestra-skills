@@ -59,10 +59,11 @@ run_lane() {
   make_repo "$dir" >/dev/null 2>&1 || { echo "$lane|$impl|FAIL|could not create temp repo" > "$WORK/$lane.row"; return; }
 
   if [ "$ro" = "true" ]; then
-    printf '%s\n' "Read-only task. Read math.js and reply with the names of the functions it exports, one per line. Do not edit any file." > "$brief"
+    printf '%s\n' "You are a worker for this one task; do not plan, orchestrate or delegate. Read-only task. Read math.js and reply with the names of the functions it exports, one per line. Do not edit any file." > "$brief"
   else
     cat > "$brief" <<'EOF'
 # Task: add multiply()
+You are the implementer for this one task. Do it directly; do not plan, orchestrate or delegate.
 
 ## Goal
 math.js exports multiply(a, b) returning a * b, with a test.

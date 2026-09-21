@@ -1,131 +1,125 @@
 # Changing who does what (lanes)
 
-A **lane** is a job type mapped to a tool: `backend` → Codex, `ui` → Antigravity, and so on. You
-can change any lane at any time with **one command**. Every change is checked before it's saved
-and backed up, and `undo` brings the previous setup back.
+**A lane is a job, not a vendor.** The workflow says "send this to `backend`" or "have
+`code-review` check it". Which tool and model does each job is your choice, and you can change it
+with one command. Every change is validated and backed up first, and `undo` brings the previous
+setup back.
 
-All commands use `~/orchestra-skills/scripts/lanes.sh`. Tip: add an alias:
+All commands use `~/orchestra-skills/scripts/lanes.sh`. An alias makes it shorter:
 
 ```bash
 echo "alias lanes='~/orchestra-skills/scripts/lanes.sh'" >> ~/.zshrc && source ~/.zshrc
 ```
 
-(The examples below use `lanes` for short.)
+## The jobs
+
+| Job | What it does | Default tool (model) |
+|---|---|---|
+| `planner` | writes plans for medium and complex work | Claude (Fable) |
+| `planner-hard` | writes plans for very-complex work | Claude (Opus) |
+| `planner-fallback` → `planner-alt` | next planners if the one before is out of quota | Claude (Opus) → Codex (GPT-6 Astra) |
+| `architecture-review` | challenges hard plans; must be **a different family** from the planner | Codex (GPT-6 Astra) |
+| `architecture-review-alt` | the challenger when the planner is the same family as `architecture-review` | Claude (Fable) |
+| `backend` | server code | Codex |
+| `frontend` | pages and components | Antigravity (Gemini 3.8 Flash) |
+| `tests` | writes/extends tests | Codex (GPT-5.6-Luna) |
+| `refactor` | behaviour-preserving restructuring | Codex |
+| `debug` | fixes a failing gate from its output | Codex (high effort) |
+| `docs` | README / API docs | Claude (Haiku) |
+| `code-review` | reviews **every** task's diff | Claude (Haiku) |
+| `ui-review` | reviews **frontend** diffs | Codex (Luna) |
+| `security-review` | reviews **sensitive** diffs (auth, payments, permissions, uploads, SQL, crypto) | Claude (Sonnet) |
+| `final-audit` | DONE/GAPS in the Codex workflow (Claude Code uses its Opus auditor agent) | Claude (Opus) |
+| `small` | one-card quick fixes | Claude (Sonnet) |
+| `fallback` | last resort when a job fails | Claude (Sonnet, high) |
+
+A job you don't configure is skipped (reviews) or handled by the runner itself. For any job, a lane
+called `<job>-fallback` is tried before the global `fallback`.
 
 ## See the current setup
 
 ```bash
-lanes
-```
-```
-LANE             TOOL      MODEL                   EFFORT   MODE        PAID BY
-complex          codex     gpt-6-astra             high     writes      ChatGPT
-backend          claude    sonnet                  medium   writes      Claude
-ui               codex     default                 medium   writes      ChatGPT
-ui-check         agy       gemini-3.8-flash-high   default  read-only   Google
-small            claude    sonnet                  medium   writes      Claude
-fallback         claude    sonnet                  high     writes      Claude
+lanes                       # the table: job, tool, model, effort, read-only?, who pays
+lanes resolve frontend      # which lane/tool/model does a job right now
 ```
 
-## The tools you can use
-
-| Tool name | What it is | Paid by |
-|---|---|---|
-| `codex` | OpenAI Codex (GPT models) | your ChatGPT subscription |
-| `agy` | Google Antigravity (Gemini models) | Google |
-| `claude` | Claude Code (`sonnet`, `opus`, `haiku`, `fable`) | your Claude subscription |
-| `copilot` | GitHub Copilot (writes need full access, so keep it `readonly`) | GitHub |
-
-See which models a tool has: `lanes models codex`, `lanes models agy`, `lanes models claude`.
-
-## Every common change
-
-| I want to… | Command |
-|---|---|
-| **Backend → Codex** | `lanes set backend codex effort=medium` |
-| **Backend → Claude Sonnet** | `lanes set backend claude model=sonnet effort=medium` |
-| **Backend → Antigravity** | `lanes set backend agy model=gemini-3.8-flash-high` |
-| **Frontend (ui) → Codex** | `lanes set ui codex effort=medium` |
-| **Frontend (ui) → Antigravity** | `lanes set ui agy model=gemini-3.8-flash-high` |
-| **Frontend (ui) → Claude Sonnet** | `lanes set ui claude model=sonnet` |
-| **Hard tasks → GPT-6 Astra** | `lanes set complex codex model=gpt-6-astra effort=high` |
-| **Hard tasks → Claude Opus** | `lanes set complex claude model=opus effort=high` |
-| **Fallback → Claude Sonnet** | `lanes set fallback claude model=sonnet effort=high` |
-| **Add a checker for frontend** (Antigravity reviews the ui work, read-only) | `lanes set ui-check agy readonly` |
-| **Add a checker for backend** (Codex reviews the backend work) | `lanes set backend-check codex readonly` |
-| **Remove a checker** | `lanes remove ui-check` |
-| **Stronger model for one lane** | `lanes set ui agy model=gemini-3.1-pro-high` |
-
-A lane named **`<lane>-check`** is a *checker*: a second tool reviews that lane's work read-only
-before it's committed. The checker's problems go back to the implementer to fix.
-
-## A tool hit its limit (quota)
-
-**One command moves all of that tool's lanes somewhere else:**
+## Change a job
 
 ```bash
-lanes replace codex claude model=sonnet      # Codex out of quota → Claude Sonnet takes over
-lanes replace agy codex                      # Antigravity out → Codex takes over
-lanes replace claude codex                   # Claude limit reached → Codex takes over
+lanes set backend codex effort=medium
+lanes set backend claude model=sonnet
+lanes set frontend codex
+lanes set frontend agy model=gemini-3.1-pro-high
+lanes set tests codex model=gpt-5.6-luna
+lanes set docs claude model=haiku
+lanes set code-review claude model=haiku readonly
+lanes set security-review claude model=opus readonly
+lanes set planner claude model=opus readonly         # plan with Opus instead of Fable
+lanes set architecture-review codex model=gpt-6-astra readonly
+lanes remove ui-review                               # no UI review
 ```
 
-**When the quota comes back:**
+The tools: `codex` (ChatGPT plan), `agy` (Antigravity, Google), `claude` (Claude plan), `copilot`
+(GitHub), plus anything delegate-skills supports, such as `kimi` or `opencode`. See a tool's
+models with `lanes models <tool>`.
+
+Review, planner, architecture-review and final-audit lanes should be **read-only** (`readonly`).
+
+## A tool hit its limit
 
 ```bash
-lanes undo
+lanes replace codex claude model=sonnet    # every Codex job moves to Sonnet
+lanes undo                                 # quota back: restore
 ```
 
-You don't *have* to do this. When a tool fails because of its quota in the middle of a feature, the
-`lane-runner` automatically moves that task to the `fallback` lane. Use `replace` when you know
-a tool will be out for a while, so tasks don't waste a failed attempt first.
+You don't *have* to: a job that fails because of quota moves to `<job>-fallback` or `fallback`
+automatically. `replace` just saves the failed first attempt while a tool is out for a while.
 
 ## Ready-made setups
 
 ```bash
-lanes presets                 # list them
-lanes use default             # backend/complex → Codex, ui → Antigravity, small/fallback → Sonnet
-lanes use codex-frontend      # backend → Sonnet, ui → Codex, ui-check → Antigravity
+lanes presets
+lanes use default               # the ORCHESTRA layout above
+lanes use codex-frontend        # backend → Sonnet, frontend → Codex, ui-review → Antigravity
+lanes use codex-orchestrator    # for running from the Codex app: backend → Codex Luna, frontend → Codex
 ```
 
-To make your own preset, save a lane file as `examples/lanes-<name>.json` in the repo. Then
-`lanes use <name>` works.
+Your own preset: save it as `examples/lanes-<name>.json`, then `lanes use <name>`.
 
-## Undo anything
+## Adding Kimi or DeepSeek
+
+Lanes are jobs, so a new model is just a new mapping.
+
+**Kimi** (tests, for example):
+1. Install the Kimi Code CLI and log in with your Moonshot account (`kimi`).
+2. `npx skills add amElnagdy/delegate-skills --global --agent claude-code -y --skill kimi-delegate`
+3. `lanes set tests kimi`, then `~/orchestra-skills/scripts/smoke-test.sh tests`
+
+**DeepSeek** (docs or code-review, for example), through OpenCode:
+1. `npx skills add amElnagdy/delegate-skills --global --agent claude-code -y --skill opencode-delegate`
+2. `opencode auth login` → choose DeepSeek → paste your DeepSeek API key.
+3. `lanes models opencode | grep -i deepseek` to find the exact model id (`provider/model`).
+4. `lanes set docs opencode model=<that id>` (and/or `lanes set code-review opencode model=<id> readonly`).
+5. `~/orchestra-skills/scripts/smoke-test.sh docs code-review`
+
+## Older lane names still work
+
+`ui` = `frontend`, `review` = `code-review`, `ui-check` = `ui-review`, `plan-check` =
+`architecture-review`, `plan-gate` = `architecture-review-alt`, `done-gate` = `final-audit`.
+`lanes resolve` understands both, so an older config keeps working until you switch with
+`lanes use default`.
+
+## Undo and test
 
 ```bash
-lanes undo                    # restores the previous setup (repeat to go further back)
+lanes undo                                         # previous setup (repeat to go further back)
+~/orchestra-skills/scripts/smoke-test.sh backend   # a tiny real task for the jobs you changed
 ```
 
 Backups are in `~/.config/delegate-skills/backups/`.
 
-## After any change: test it
-
-```bash
-~/orchestra-skills/scripts/smoke-test.sh ui backend    # just the lanes you changed
-```
-
-Each lane gets a tiny real coding task. `PASS` means that tool works from that lane. A "quota"
-message means the tool is fine but out of quota.
-
 ## Or just ask Claude
 
-In Claude Code you can say it in plain words, and Claude runs the command for you:
+> Move the frontend job to Codex and have Antigravity review the UI.
 
-> Switch the backend lane to Codex and add Antigravity as a checker for the frontend.
-
-> Codex hit its limit, move its lanes to Sonnet until it's back.
-
-## Per-project lanes
-
-A project can have its own lanes: `.delegate/config.json` inside the repo, in the same format.
-They replace the global lanes with the same name, for that project only. Claude asks you before
-trusting a project's lane file.
-
-## Which setup should I use?
-
-- **Save the most Claude usage:** put the big coding lanes (`backend`, `ui`, `complex`) on `codex`
-  or `agy`. Keep `small` and `fallback` on Sonnet.
-- **Best quality on hard work:** `complex` → `codex model=gpt-6-astra` or `claude model=opus`.
-- **Two opinions on the frontend:** `ui` → one tool, `ui-check` → another.
-- **Every lane on `claude`** works, but then all coding uses your Claude plan. That's fine as a
-  temporary fallback, but it's not the token-saving setup.
+> Codex hit its limit, move its jobs to Sonnet until it's back.

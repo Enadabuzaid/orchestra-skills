@@ -1,18 +1,17 @@
 ---
 name: orchestrate
 description: >-
-  Build a multi-task feature with expensive models only for thinking and cheap models for the
-  rest: plan with Fable/Opus, gate the plan through an Opus plan-reviewer until APPROVE, hand the
-  approved plan to a Sonnet lane-runner (it writes briefs, sends them to your delegate-skills lanes
-  (Codex, Antigravity, Claude Sonnet, … as configured), runs check lanes, reviews diffs, and commits), then loop an Opus
-  completion-auditor (plan checklist + verify commands) until DONE. Use when the user says
-  "orchestrate", "plan and delegate", "big model plans, cheap model builds", or wants to save tokens
-  on a multi-task feature. DO NOT USE for a one-file change you can make inline faster than writing a brief.
+  Build features paying for big-model thinking only where it's needed: a cheap Haiku task-router
+  picks simple / medium / complex / very-complex; the plan comes from a semantic `planner` lane (Fable
+  by default, Opus for very hard work, with fallbacks); hard plans are challenged by a different AI
+  (the architecture-review lane); a Sonnet lane-runner hands each task a tight task card and builds
+  across job lanes (backend, frontend, tests, refactor, debug, docs, reviews); one Opus final audit decides DONE. Use when the user says "orchestrate" or wants to save
+  tokens on feature work. Your session can run on Sonnet, because planning happens in the lane.
 license: MIT
 metadata:
   author: Enad Abuzaid
   homepage: https://github.com/Enadabuzaid/orchestra-skills
-  version: 0.4.0
+  version: 0.5.0
   requires: amElnagdy/delegate-skills (codex-delegate, agy-delegate, claude-delegate, copilot-delegate, delegate-setup)
 ---
 
@@ -21,50 +20,104 @@ metadata:
 You are the **orchestrator**. You think, gate, review and commit. You do **not** type implementation
 code when a lane fits — implementers do, in their own sessions, on their own quota.
 
-Token rule of thumb: the big thinkers (Fable, Opus, GPT-6 Astra) run ~3–4 times per feature (plan,
-plan gate, optional second opinion, final audit). Everything line-by-line runs on a cheaper model.
+Token rule of thumb: **only the thinking that's needed gets paid for.** A cheap router picks the
+route. Planning goes to the **`planner` lane** (Fable by default), not to this session, so this
+session can run on a cheap model (`/model sonnet`). A **different AI** challenges hard plans, and the
+Opus final audit runs once, repeating only if it finds gaps.
 
-| Role | Model | Where |
+```
+request → task-router (Haiku)
+  simple        → one task card → lane → tests → commit
+  medium        → planner (Fable)                          → build → final audit
+  complex       → planner (Fable) → architecture-review (Astra)     → build → final audit
+  very-complex  → planner-hard (Opus) → architecture-review (Astra) → build → final audit
+```
+
+| Role | Default model | Where |
 |---|---|---|
-| Plan | Fable 5.1 or Opus 5 | this session, or the `Plan` agent with `model: "fable"` |
-| Plan gate | Opus 5 | `plan-reviewer` subagent |
-| Second opinion (optional) | GPT-6 Astra | `plan-check` lane, read-only |
-| Large / complicated tasks | GPT-6 Astra | `complex` lane |
-| Normal tasks | Codex default, Gemini Flash, Sonnet | `backend`, `ui`, `small` lanes |
-| Stages 3–6: briefs, dispatch, diff review, commits | Sonnet 5 | `lane-runner` subagent |
-| Completion check (loops until DONE) | Opus 5 | `completion-auditor` subagent |
+| Route the request | Haiku | `task-router` subagent |
+| Plan | Fable (primary), Opus (fallback / very hard), Astra (alternate) | `planner`, `planner-hard`, `planner-fallback`, `planner-alt` lanes |
+| Challenge the plan (complex+) | **a different model family** from the planner | `architecture-review` (or `architecture-review-alt` when the first is the planner's family) |
+| Build | job lanes: backend, frontend, tests, refactor, debug, docs, small | your lane config |
+| Reviews per task | `code-review` (every task), `ui-review` (frontend), `security-review` (sensitive) | `lane-runner` |
+| Coordination, gates, commits | Sonnet | `lane-runner` subagent |
+| Final audit (once; repeats only on gaps) | Opus | `completion-auditor` subagent |
 
-## Stage 1 — Plan (big model)
+**Lanes are jobs, not vendors.** The vocabulary, the older names that still work, and the rules
+for reviews, debug and fallbacks are all in [references/lanes.md](references/lanes.md). Resolve a
+job with `~/orchestra-skills/scripts/lanes.sh resolve <job>`, and never name a vendor in a plan or
+brief.
 
-- If the current session model is Fable or Opus, plan here. Otherwise dispatch the `Plan` agent with
-  `model: "fable"` (or `"opus"`) and give it the requirements plus relevant file paths.
-- Write the plan to a file (`docs/plans/<date>-<feature>.md` in the repo, or the plan-mode file).
-- Record the **base commit** (`git rev-parse HEAD`) at the top of the plan. The final audit diffs from it.
-- Use [references/plan-template.md](references/plan-template.md). The plan must contain:
-  - **Tasks**, each small enough for one brief: goal, files, acceptance tests, lane
-    (`complex` / `backend` / `ui` / `small`), dependencies, and a `Status` column (`todo` / `done`).
-  - **Definition of Done**: a checklist of user-visible outcomes, not just "tests pass". For example:
-    "admin can deactivate a provider from the list page", "a deactivated provider can't log in".
-  - **Verify**: the exact commands that prove it works: the full test suite, static analysis, the
-    formatter check, the build, and at least one runtime check (curl a route, an artisan command,
-    or a script that exercises the feature). Mark anything that needs a human (for example a
-    browser check) as `manual`.
+**Context isolation is the main token saver.** Every implementer, reviewer and checker gets one
+task card ([references/brief-template.md](references/brief-template.md)), checked by
+`~/orchestra-skills/scripts/brief-check.sh`: never the conversation, the plan discussion, old
+attempts, or whole files.
 
-## Stage 2 — Plan gate (Opus recheck, mandatory)
+**Fallbacks, for every lane:** when a lane fails because of quota, permissions or availability,
+use `<lane>-fallback` if it exists, then the global `fallback` lane. For planners the chain is
+`planner` → `planner-fallback` → `planner-alt`. Always tell the user which one actually ran.
 
-Dispatch the `plan-reviewer` subagent with the plan file path and the repo path.
+## Stage 0 — Route (cheap)
 
-- `APPROVE` → continue.
-- Numbered fixes → revise the plan, re-dispatch. Loop until `APPROVE` (max 3 rounds; after that,
-  show the remaining disagreements to the user and let them decide).
+Dispatch the `task-router` subagent with the user's request and the repo path. Follow its `ROUTE`,
+unless the user named one ("treat this as very complex"): the user always wins.
 
-**Optional second opinion (GPT-6 Astra)** — for large or risky features, after Opus approves, send the
-plan to the read-only `plan-check` lane (`codex-delegate --lane plan-check`) with the brief: "Review
-this plan for gaps, wrong assumptions about the code, and risky ordering. Reply APPROVE or a numbered
-list of fixes." A different model family catches different mistakes. If it raises real issues, fix
-the plan and send it back through `plan-reviewer`.
+- **simple**: no plan file and no gates. Dispatch the `lane-runner` with: "Simple task, no plan. Write
+  one brief for: <request>. Lane: <router's lane, default `small`>. Gate: <the repo's test command
+  for the touched area>. Land it as one commit." Report what it returns. Done.
+- **medium**: Stage 1 with `planner` → **skip Stage 2** → Stages 3–6 → Stage 7.
+- **complex**: Stage 1 with `planner` → Stage 2 → Stages 3–6 → Stage 7.
+- **very-complex**: Stage 1 with `planner-hard` (if it's missing, `planner`) → Stage 2 → Stages 3–6 → Stage 7.
 
-Never dispatch implementation before `APPROVE`.
+## Stage 1 — Plan (the planner lane)
+
+One planner produces the architecture. It runs **read-only** and returns the plan as text; you save it.
+
+1. `git status` must be clean (otherwise ask the user to commit or stash). Record the base commit.
+2. Write the planner brief to `${TMPDIR:-/tmp}/orchestrate/<repo>/plan/brief.md`:
+   - the user's request and the router's notes (files, lanes);
+   - "Repo: <abs path>. Base commit: <sha>. Explore the code read-only, then reply with ONLY the
+     complete plan in markdown, following this template:" and the full text of
+     [references/plan-template.md](references/plan-template.md);
+   - the plan must contain **Tasks** (each small enough for one brief: goal, files, acceptance
+     tests, task gate, **job lane** from references/lanes.md (`backend`, `frontend`, `tests`,
+     `refactor`, `debug`, `docs`, `small`), `Sensitive: yes` on tasks touching auth, payments,
+     permissions, uploads or crypto, dependencies, a `Status` column), **Contracts** shared between tasks, a **Definition of Done**
+     made of user-visible outcomes, and **Verify**: the repo's real commands (full tests, static
+     analysis, format check, build) plus at least one runtime check, with `manual` for anything
+     that needs a human.
+3. Run it (read-only), blocking until `result.json` exists:
+   `node ~/.claude/skills/<lane's tool>-delegate/scripts/relay.mjs --lane <planner lane> --read-only --brief <brief> --cd <repo> --out-dir <run>/plan/<lane> --timeout 45m`
+   (prefix `env -u ANTHROPIC_API_KEY` when the tool is `claude`). If it fails because of quota,
+   permissions or availability, go down the chain: `planner-fallback`, then `planner-alt`.
+4. Save `finalMessage` to `docs/plans/<YYYY-MM-DD>-<feature>.md`, and add `Planner: <lane> (<tool>
+   <model>)` under the title. Check that Tasks, Definition of Done and Verify are present; if not,
+   send one delta brief to the same session (`--session <id>`). Commit the plan.
+5. **No planner lane configured?** Plan in this session instead (use `/model fable` or `opus` for
+   that), and say so.
+
+## Stage 2 — Challenge the plan with a different AI (complex and very-complex)
+
+Skip for medium. The challenger must be a **different model family** from the planner that actually ran:
+
+Use `architecture-review`, unless its tool is the same family as the planner that actually ran;
+then use `architecture-review-alt` (`lanes.sh resolve` accepts the older names `plan-check` and
+`plan-gate`).
+
+1. Write a brief to `<run>/architecture-review/round-N/brief.md`: the text of
+   `~/orchestra-skills/agents/plan-reviewer.md` **below its front-matter**, plus "Plan file: <abs
+   path>. Repo: <abs path>. Review the plan against the real code. Reply APPROVE or CHANGES REQUIRED
+   in the exact format above."
+2. Run it read-only on the challenger lane with the relay, and block until `result.json` exists.
+3. `APPROVE` → continue. `CHANGES REQUIRED` → send the planner a delta brief with the numbered
+   fixes (`--session <id>` from its result), save the revised plan, commit it, and challenge again
+   (max 3 rounds; then show the user the remaining disagreements).
+
+**Fallback:** if neither challenger lane is a different family from the planner, or it or fails because
+of quota, permissions or availability, dispatch the `plan-reviewer` subagent (Opus) instead, and say
+which checker was used.
+
+Never dispatch implementation before the plan is approved (complex+) or saved (medium).
 
 ## Stages 3–6 — Hand the plan to the `lane-runner` (Sonnet)
 
@@ -97,15 +150,7 @@ Lanes live in `~/.config/delegate-skills/config.json` and **the user can change 
 read the current map (`node ~/.claude/skills/delegate-setup/scripts/config.mjs load`) instead of
 assuming one. Default meaning of each lane name:
 
-| Lane | Typical work |
-|---|---|
-| `complex` | large or tricky tasks: cross-cutting refactors, hard algorithms, concurrency |
-| `backend` | server code, actions, migrations, jobs, tests |
-| `ui` | pages, components, styling |
-| `small` | small fixes, lint/static-analysis fixes, text |
-| `fallback` | when a lane fails twice or hits a quota limit |
-| `plan-check`, `copilot-review` | read-only second opinions |
-| **`<lane>-check`** | a read-only **check lane**: a second tool reviews `<lane>`'s work before it's committed (e.g. `ui-check`) |
+The job lanes and their rules are in [references/lanes.md](references/lanes.md).
 
 ```bash
 node "<delegate-skill-dir>/scripts/relay.mjs" --lane backend --brief brief.md --cd "$REPO"
@@ -141,7 +186,7 @@ plan is always the source of truth for progress.
 
 Don't start Stage 7 while any task is still `todo`.
 
-## Stage 7 — Completion loop (Opus decides when it's finished)
+## Stage 7 — Final audit (Opus, once; repeats only on gaps)
 
 Implementation being finished doesn't mean the feature is finished. Dispatch the
 `completion-auditor` subagent (Opus) with the plan path, the repo path, and the base commit. It
@@ -155,7 +200,7 @@ command, checks that tasks from different implementers fit together, and looks f
 - Maximum 3 rounds. If there are still gaps after round 3, stop and show the user the remaining gaps
   with the auditor's evidence. Never report the feature as finished while the auditor says `GAPS`.
 
-For large or risky features, you may also send the final diff to the read-only `plan-check` lane
+For large or risky features, you may also send the final diff to the read-only `architecture-review` lane
 (GPT-6 Astra) for a second opinion. Feed real findings back into the loop.
 
 ## Stage 8 — Report to the user
@@ -176,7 +221,7 @@ Only after `DONE`. Keep it short and factual:
 - Report outcomes faithfully: a lane that failed is reported as failed, with its `result.json` status.
 - Parallel tasks share one working tree: give each task its **own** test file as its gate and run
   the full suite only after they have all landed.
-- `ui` lane failing with *write_file permission auto-denied* → Antigravity needs a scoped rule for
+- A lane on Antigravity failing with *write_file permission auto-denied* → Antigravity needs a scoped rule for
   that folder: `~/orchestra-skills/scripts/agy-allow.sh <repo> --tests "<test cmd>"`. Never switch
   to `--dangerously-skip-permissions` without the human's explicit yes.
 - A lane that reports a quota or rate limit (402/429) → send the task to `fallback` and tell the user.

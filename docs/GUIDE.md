@@ -1,6 +1,9 @@
 # The complete guide
 
 This guide explains how orchestra-skills works, how to install it, and how to use it day to day.
+**Start with [ARCHITECTURE.md](ARCHITECTURE.md)** for the current design (router, planner lane, job
+lanes, task cards). This guide's sections on lanes use some older names. `lanes resolve` maps them
+(see [LANES.md](LANES.md)).
 Read it top to bottom once; afterwards the [cheat sheet](#cheat-sheet) at the end is enough.
 
 - [1. The idea](#1-the-idea)

@@ -2,15 +2,14 @@
 
 You can run the whole workflow **from Codex** instead of Claude Code:
 
-| Step | Who | How it's chosen |
+| Step | Job lane | Default in the `codex-orchestrator` preset |
 |---|---|---|
-| Plan | **GPT-6 Astra**: your Codex session | `/model gpt-6-astra` in Codex |
-| Check the plan | **Claude Fable**, read-only | the `plan-gate` lane |
-| Backend | **Codex GPT-5.6-Luna** (small, cheap) | the `backend` lane |
-| Frontend | **Codex** | the `ui` lane |
-| Check the frontend | **Antigravity**, read-only | the `ui-check` lane |
-| Small fixes / fallback | **Claude Sonnet** | the `small` / `fallback` lanes |
-| Final done check (loops until DONE) | **Claude Opus**, read-only | the `done-gate` lane |
+| Route | – (your Codex session, quick look) | the session model |
+| Plan | `planner` / `planner-hard` | Claude Fable / Opus (read-only) |
+| Challenge hard plans | `architecture-review` (different family from the planner) | Codex GPT-6 Astra |
+| Backend / frontend / tests | `backend`, `frontend`, `tests` | Codex GPT-5.6-Luna / Codex / Codex Luna |
+| Reviews | `code-review`, `ui-review`, `security-review` | Haiku / Antigravity / Sonnet |
+| Final audit (loops until DONE) | `final-audit` | Claude Opus (read-only) |
 
 Codex uses the `orchestrate-portable` skill. It does the same job as `orchestrate` in Claude Code,
 but instead of Claude Code subagents, it calls Claude **through the relay** for the two checks.
@@ -20,16 +19,16 @@ but instead of Claude Code subagents, it calls Claude **through the relay** for 
 ```bash
 cd ~/orchestra-skills && git pull && ./install.sh     # links orchestrate-portable into ~/.codex/skills
 ~/orchestra-skills/scripts/lanes.sh use codex-orchestrator
-~/orchestra-skills/scripts/smoke-test.sh plan-gate done-gate backend ui
+~/orchestra-skills/scripts/smoke-test.sh planner architecture-review backend frontend final-audit
 ```
 
 `lanes use codex-orchestrator` sets exactly the table above. Change any row afterwards with
 `lanes set …` (see [LANES.md](LANES.md)), for example:
 
 ```bash
-lanes set plan-gate claude model=opus readonly        # Opus checks the plan instead of Fable
+lanes set planner claude model=opus readonly          # Opus plans instead of Fable
 lanes set backend codex model=gpt-5.6-terra           # a bigger Codex model for backend
-lanes set ui agy model=gemini-3.8-flash-high          # frontend on Antigravity instead
+lanes set frontend agy model=gemini-3.8-flash-high    # frontend on Antigravity instead
 ```
 
 ## Every feature, step by step
@@ -44,13 +43,14 @@ lanes set ui agy model=gemini-3.8-flash-high          # frontend on Antigravity 
    > Use orchestrate-portable to let patients cancel a booking up to 24h before the visit. Done means:
    > cancel button on the booking page, status becomes "cancelled", provider gets an email.
 5. **Watch for these, in order:**
-   - `docs/plans/<date>-<feature>.md`, written by Astra, with Tasks, Definition of Done and Verify;
-   - **Claude Fable** replying `APPROVE` or `CHANGES REQUIRED` (the plan-gate). No code before
-     `APPROVE`;
-   - tasks sent to their lanes: `relay: completed · codex` (backend on Luna, ui on Codex), then the
-     `ui-check` review by Antigravity; one commit per task;
-   - Codex running every Verify command and handing the output to **Claude Opus** (the done-gate),
-     which replies `DONE` or `GAPS`. Gaps get built, then Opus checks again;
+   - the route (simple / medium / complex / very-complex);
+   - `docs/plans/<date>-<feature>.md` from the `planner` lane, with Tasks, Definition of Done and
+     Verify;
+   - for complex work, the `architecture-review` (a different family) replying `APPROVE` or
+     `CHANGES REQUIRED`. No code before `APPROVE`;
+   - one task card per task sent to its job lane, then code/ui/security reviews; one commit per task;
+   - Codex running every Verify command and handing the output to the `final-audit` lane, which
+     replies `DONE` or `GAPS`. Gaps get built, then it checks again;
    - the final report, including a manual check for you.
 6. **Do the manual check, then look at `git log` and push.**
 
@@ -58,14 +58,14 @@ lanes set ui agy model=gemini-3.8-flash-high          # frontend on Antigravity 
 
 | | Claude Code (`orchestrate`) | Codex (`orchestrate-portable`) |
 |---|---|---|
-| Planner | Opus/Fable (`/model`) | Astra (`/model gpt-6-astra`) |
-| Plan check | `plan-reviewer` subagent (Opus) | `plan-gate` lane (Claude, read-only) |
+| Route | `task-router` subagent (Haiku) | your Codex session (quick rubric) |
+| Plan | `planner` lane (both) | `planner` lane (both) |
+| Challenge | `architecture-review` lane (fallback: Opus `plan-reviewer` subagent) | `architecture-review` lane |
 | Coordination | `lane-runner` subagent (Sonnet) | your Codex session itself |
-| Done check | `completion-auditor` subagent (runs the commands itself) | `done-gate` lane: Codex runs the commands, Claude reads the output |
-| Paid by | Claude plan for the thinking | **ChatGPT plan for the thinking and coordination**, Claude only for the 2 checks |
+| Final audit | `completion-auditor` subagent (runs the commands itself) | `final-audit` lane: Codex runs the commands, the auditor reads the output |
 
-In Codex mode your **Claude plan is used only for the two short checks**, plus the Sonnet
-`small`/`fallback` lanes if they're used. Planning, coordination and most coding run on ChatGPT.
+Both use the same job lanes and the same task cards. Only the coordinator differs: from Codex,
+coordination runs on your ChatGPT plan, and Claude is used only by the jobs you map to it.
 
 ## Test it
 

@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
 # Smoke-test every delegation lane against a throwaway git repo.
-#
-#   scripts/smoke-test.sh                 # all lanes in your lane config
-#   scripts/smoke-test.sh backend small   # only these lanes
-#
-# Each lane gets its own temp repo with math.js + a node:test file.
-#  - write lanes must add multiply(), keep `node --test` green, and NOT commit.
-#  - read-only lanes (readOnly: true) must answer and change nothing.
-# Lanes run in parallel (copilot lanes run last). Nothing outside the temp dirs is touched.
 set -uo pipefail
 
 SKILLS_DIR="${SKILLS_DIR:-$HOME/.claude/skills}"
@@ -48,14 +40,14 @@ EOF
 }
 
 run_lane() {
-  local lane="$1" impl ro dir out brief result status verdict=FAIL reason=""
+  local lane="$1" impl ro dir out brief result status verdict=FAIL reason="" ro_violation="" unexpected=""
   impl="$(lane_field "$lane" implementer)"
   ro="$(lane_field "$lane" readOnly)"
   dir="$WORK/$lane"; out="$WORK/$lane.out"; brief="$WORK/$lane.brief.md"
   local relay="$SKILLS_DIR/$impl-delegate/scripts/relay.mjs"
 
   if [ -z "$impl" ]; then echo "$lane|?|FAIL|lane not in config" > "$WORK/$lane.row"; return; fi
-  if [ ! -f "$relay" ]; then echo "$lane|$impl|FAIL|$impl-delegate not installed" > "$WORK/$lane.row"; return; fi
+  if [ ! -f "$relay" ]; then echo "$lane|$Impl|FAIL|$impl-delegate not installed" > "$WORK/$lane.row"; return; fi
   make_repo "$dir" >/dev/null 2>&1 || { echo "$lane|$impl|FAIL|could not create temp repo" > "$WORK/$lane.row"; return; }
 
   if [ "$ro" = "true" ]; then
@@ -69,7 +61,7 @@ math.js exports multiply(a, b) returning a * b, with a test.
 
 ## Do
 1. Add `multiply(a, b)` to math.js and export it next to `add`.
-2. Add a `multiply` test to math.test.js using node:test + node:assert, like the existing `add` test.
+2. Add a `multiply` test to math.test.js using node:test + node:assert, like the existing `add test.
 3. Run `node --test` and make sure it passes.
 
 ## Do NOT
@@ -82,54 +74,33 @@ EOF
   fi
 
   local start=$SECONDS
-  # Claude lanes use your claude.ai subscription, not an API key (set ORCHESTRA_USE_API_KEY=1 to keep it).
+
   local unset_key=(); [ "$impl" = "claude" ] && [ -z "${ORCHESTRA_USE_API_KEY:-}" ] && unset_key=(-u ANTHROPIC_API_KEY)
-  env ${unset_key[@]+"${unset_key[@]}"} node "$relay" --lane "$lane" --brief "$brief" --cd "$dir" --timeout "$TIMEOUT" --out-dir "$WORK/$lane.run" >"$out" 2>&1
-  local secs=$((SECONDS - start))
-  result="$WORK/$lane.run/result.json"
-  status="$(node -e 'try{process.stdout.write(require(process.argv[1]).status||"")}catch{process.stdout.write("no-result")}' "$result")"
+  env ${unset_key[@]+‰Ý[œÙ]ÚÙ^VÐ_HŸH›ÙH‰™[^HˆK[[™H‰[™HˆKXœšYYˆ‰œšYYˆˆKXÙ‰\ˆˆK][Y[Ý]‰SQSÕUˆK[Ý]Y\ˆ‰ÓÔ’ËÉ[™Kœ[ˆˆˆ‰Ý]ˆ‰ŒBˆØØ[ÙXÜÏI
 
-  cd "$dir" || return
-  local commits changed
-  commits="$(git rev-list --count HEAD)"
-  changed="$(git status --porcelain | wc -l | tr -d ' ')"
+ÑPÓÓ‘ÈHÝ\
+JBˆ™\Ý[H‰ÓÔ’ËÉ[™Kœ[‹Ü™\Ý[šœÛÛˆ‚ˆÝ]\ÏH‰
+›ÙHYH	Ýž^Ü›ØÙ\ÜËœÝÝ]Üš]J™\]Z\™J›ØÙ\ÜË˜\™Ý–ÌWJKœÝ]\ßˆŠ_XØ]ÚÜ›ØÙ\ÜËœÝÝ]Üš]J››Ë\™\Ý[Š_IÈ‰™\Ý[ŠH‚ˆ›×Ýš[Û][ÛH‰
+›ÙHYH	Ýž^ØÛÛœÝ\™\]Z\™J›ØÙ\ÜË˜\™Ý–ÌWJKœ™XYÛ›Uš[Û][ÛŽÜ›ØÙ\ÜËœÝÝ]Üš]JOO]YOÈYHŽOOY˜[ÙOÈ™˜[ÙHŽˆ[šÛ›ÝÛˆŠ_XØ]ÚÜ›ØÙ\ÜËœÝÝ]Üš]J[šÛ›ÝÛˆŠ_IÈ‰™\Ý[ŠB‚ˆÙ‰\ˆˆ™]\›‚ˆØØ[ÛÛ[Z]ÈÚ[™ÙYˆÛÛ[Z]ÏH‰
+Ú]™]‹[\ÝKXÛÝ[PQ
+H‚ˆÚ[™ÙYH‰
+Ú]Ý]\ÈK\Ü˜Ù[Z[ˆØÈ[ˆY	È	ÊH‚ˆ[™^XÝYH‰
+Ú]Ý]\ÈK\Ü˜Ù[Z[ˆÙYQH	ÜË×‹‹‹ËÉÈÜ™\Q]ˆ	×ŠX]šœßX]\ÝšœÊI	ÈYJH‚‚ˆYˆÈ‰Ý]\ÈˆOH˜ÛÛ\]YˆH	‰ˆÜ™\\ZQHœ][Ý_˜]KÛ[Z]\ØYÙH[Z]ŸŽHˆ‰ÓÔ’ËÉ[™Kœ[ˆ‹Ê‹šœÛÛ›‰ÓÔ’ËÉ[™Kœ[ˆ‹ÜÝ\œ‹‰Ý]ˆ‹Ù]‹Û[È[‚ˆ™X\ÛÛH‰[\][ÝHÜˆ˜]H[Z]™XXÚYÈHÙ]\\Èš[™K™]žHY\ˆ]™\Ù]È
+ÙYH	Ý]
+H‚ˆ[YˆÈ‰Ý]\ÈˆOH˜ÛÛ\]YˆNÈ[ˆ™X\ÛÛHœ™[^HÝ]\Îˆ	Ý]\È
+ÙYH	Ý]
+H‚ˆ[YˆÈ‰ÛÛ[Z]ÈˆOHŒHˆNÈ[ˆ™X\ÛÛHš[\[Y[\ˆÛÛ[Z]Y
+]\Ý›Ý
+H‚ˆ[YˆÈ‰›ÈˆHYHˆNÈ[‚ˆYˆÈ‰›×Ýš[Û][ÛˆˆHYHˆNÈ[ˆ™X\ÛÛHœ™[^H]XÝYH™XY[Û›Hš[Û][Ûˆ‚ˆ[YˆÈ‰Ú[™ÙYˆOHŒˆNÈ[ˆ™X\ÛÛHœ™XY[Û›H[™HÚ[™ÙYš[\È‚ˆ[YˆH›ÙHYH	Ü›ØÙ\ÜË™^]
+ØYË\Ý
+™\]Z\™J›ØÙ\ÜË˜\™Ý–ÌWJK™š[˜[Y\ÜØYÙ_ˆŠOÌŒJIÈ‰™\Ý[ŽÈ[ˆ™X\ÛÛH˜[œÝÙ\ˆY›ÝY[[ÛˆY‚ˆ[ÙH™\™XÝTTÔÎÈ™X\ÛÛH˜[œÝÙ\™Y›ÈÚ[™Ù\ÈŽÈšBˆ[ÙBˆYˆÈ[ˆ‰[™^XÝYˆNÈ[ˆ™X\ÛÛH˜Ú[™ÙYš[JÊHÝ]ÚYHœšYYŽˆ	
+š[ˆ	É\ÉÈ‰[™^XÝYˆˆ	×‰È	È	ÊH‚ˆ[YˆHÜ™\\H›][\HˆX]šœÎÈ[ˆ™X\ÛÛH›][\J
+H›ÝYY‚ˆ[YˆH›ÙHK]\Ý‹Ù]‹Û[‰ŒNÈ[ˆ™X\ÛÛH››ÙHK]\Ý˜Z[È‚ˆ[YˆHÜ™\\H›][\HˆX]\ÝšœÎÈ[ˆ™X\ÛÛH››È][\H\Ý‚ˆ[ÙH™\™XÝTTÔÎÈ™X\ÛÛH›][\HYY\ÝÈÜ™Y[‹ØÛÜHÛX[‹›ÝÛÛ[Z]YŽÈšBˆšBˆXÚÈ‰[™_	[\	™\™XÝ	™X\ÛÛˆ
+	ÜÙXÜß\ÊHˆˆ‰ÓÔ’ËÉ[™Kœ›ÝÈ‚ŸB‚™XÚÈ”Û[ÚÙK]\Ý[™È[™\Îˆ	ÓS‘TÖÊ—_H‚™XÚÈ•ÛÜšÈ\Žˆ	ÓÔ’È
+[Y[Ý]\ˆ[™Nˆ	SQSÕU
+H‚™XÚÂ“UOJ
+B™›Üˆ[™H[ˆ‰ÓS‘TÖÐ_HŽÈÂˆYˆÈ‰
+[™WÙšY[‰[™Hˆ[\[Y[\ŠHˆH˜ÛÜ[ÝˆNÈ[ˆUJÏJ‰[™HŠNÈ[ÙH[—Û[™H‰[™Hˆ	ˆšB™Û™BØZ]™›Üˆ[™H[ˆ	ÓUVÐJÈ‰ÓUVÐ_HŸNÈÈ[—Û[™H‰[™HŽÈÛ™B‚™˜Z[ÏLœš[ˆ	ÉKLM\È	KNÈ	KMœÈ	\×‰ÈS‘HÓÓ‘TÕSURS™›Üˆ[™H[ˆ‰ÓS‘TÖÐ_HŽÈÂˆQ”ÏIß	È™XY\ˆHˆˆ‰ÓÔ’ËÉ[™Kœ›ÝÈ‚ˆš[ˆ	ÉKLM\È	KNÈ	KMœÈ	\×‰È‰ˆ‰Hˆ‰ˆˆ‰ˆ‚ˆÈ‰ˆˆHTÔÈH˜Z[ÏI
 
-  if [ "$status" != "completed" ] && grep -qiE "quota|rate.?limit|usage limit|402|429" "$WORK/$lane.run"/*.jsonl "$WORK/$lane.run"/stderr.txt "$out" 2>/dev/null; then
-    reason="$impl quota or rate limit reached; the setup is fine, retry after it resets (see $out)"
-  elif [ "$status" != "completed" ]; then reason="relay status: $status (see $out)"
-  elif [ "$commits" != "1" ]; then reason="implementer committed (must not)"
-  elif [ "$ro" = "true" ]; then
-    if [ "$changed" != "0" ]; then reason="read-only lane changed files"
-    elif ! node -e 'process.exit(/add/.test(require(process.argv[1]).finalMessage||"")?0:1)' "$result"; then reason="answer did not mention add"
-    else verdict=PASS; reason="answered, no changes"; fi
-  else
-    if ! grep -q "multiply" math.js; then reason="multiply() not added"
-    elif ! node --test >/dev/null 2>&1; then reason="node --test fails"
-    elif ! grep -q "multiply" math.test.js; then reason="no multiply test"
-    else verdict=PASS; reason="multiply added, tests green, not committed"; fi
-  fi
-  echo "$lane|$impl|$verdict|$reason (${secs}s)" > "$WORK/$lane.row"
-}
-
-echo "Smoke-testing lanes: ${LANES[*]}"
-echo "Work dir: $WORK (timeout per lane: $TIMEOUT)"
-echo
-# Copilot's startup version check has a hard 10s limit that it can miss under heavy
-# parallel load, so copilot lanes run after the others finish.
-LATE=()
-for lane in "${LANES[@]}"; do
-  if [ "$(lane_field "$lane" implementer)" = "copilot" ]; then LATE+=("$lane"); else run_lane "$lane" & fi
-done
-wait
-for lane in "${LATE[@]+"${LATE[@]}"}"; do run_lane "$lane"; done
-
-fails=0
-printf '%-15s %-8s %-6s %s\n' LANE TOOL RESULT DETAIL
-for lane in "${LANES[@]}"; do
-  IFS='|' read -r l i v r < "$WORK/$lane.row"
-  printf '%-15s %-8s %-6s %s\n' "$l" "$i" "$v" "$r"
-  [ "$v" = PASS ] || fails=$((fails + 1))
-done
-echo
-[ "$fails" -eq 0 ] && echo "All lanes passed." || echo "$fails lane(s) failed. Logs: $WORK"
-exit "$fails"
+˜Z[È
+ÈJJB™Û™B™XÚÂ–È‰˜Z[ÈˆY\HH	‰ˆXÚÈ[[™\È\ÜÙYˆˆXÚÈ‰˜Z[È[™JÊH˜Z[YˆÙÜÎˆ	ÓÔ’È‚™^]‰˜Z[È‚

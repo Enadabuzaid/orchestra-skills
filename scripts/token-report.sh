@@ -55,18 +55,23 @@ for (const dir of process.argv.slice(2)) {
     input = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
     output = u.output_tokens;
   }
-  rows.push({ run: path.basename(dir) === "run" ? path.basename(path.dirname(dir)) : path.basename(dir), lane: r.lane || "–", tool, model: r.model || "default", status: r.status, input, output, cost, quota: quota[tool] || "?" });
+  // Label = the path under /orchestrate/<repo>/ (e.g. "T2/review/run_uireview"), minus a trailing "/run".
+  const m = dir.split("/orchestrate/")[1];
+  const label = m ? m.split("/").slice(1).join("/").replace(/\/run$/, "") || path.basename(dir) : path.basename(dir);
+  rows.push({ run: label, lane: r.lane || "–", tool, model: r.model || "default", status: r.status, input, output, cost, quota: quota[tool] || "?" });
 }
 
 if (!rows.length) { console.log("No result.json found in the given dirs."); process.exit(1); }
 const pad = (s, n) => String(s).padEnd(n);
-console.log(pad("RUN", 14) + pad("LANE", 10) + pad("TOOL", 8) + pad("MODEL", 22) + pad("STATUS", 11) + pad("IN TOKENS", 12) + pad("OUT", 9) + pad("USD", 8) + "PAID BY");
+console.log(pad("RUN", 24) + pad("LANE", 16) + pad("TOOL", 8) + pad("MODEL", 22) + pad("STATUS", 11) + pad("IN TOKENS", 12) + pad("OUT", 9) + pad("USD", 8) + "PAID BY");
 for (const x of rows) {
-  console.log(pad(x.run.slice(0, 13), 14) + pad(x.lane, 10) + pad(x.tool, 8) + pad(String(x.model).slice(0, 21), 22) + pad(x.status, 11) +
+  console.log(pad(x.run.slice(0, 23), 24) + pad(x.lane.slice(0, 15), 16) + pad(x.tool, 8) + pad(String(x.model).slice(0, 21), 22) + pad(x.status, 11) +
     pad(num(x.input), 12) + pad(typeof x.output === "string" ? x.output : num(x.output), 9) + pad(x.cost == null ? "–" : "$" + x.cost.toFixed(3), 8) + x.quota);
 }
-const offClaude = rows.filter((x) => x.tool !== "claude" && x.tool !== "unknown").length;
+const done = rows.filter((x) => x.status === "completed");
+const offClaude = done.filter((x) => x.tool !== "claude" && x.tool !== "unknown").length;
+const failed = rows.length - done.length;
 const claudeCost = rows.filter((x) => x.cost != null).reduce((a, x) => a + x.cost, 0);
-console.log(`\n${offClaude}/${rows.length} runs used a known non-Claude quota. Claude lane spend: $${claudeCost.toFixed(3)} (Sonnet).`);
+console.log(`\n${offClaude}/${done.length} completed runs used a non-Claude quota${failed ? ` (${failed} failed run(s) not counted: quota/permissions, then fallback)` : ""}. Claude lane spend: $${claudeCost.toFixed(3)}.`);
 console.log("\"–\" means that CLI doesn't report the number. Antigravity keeps usage in its own account.");
 JS

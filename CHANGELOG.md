@@ -3,6 +3,19 @@
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Install a specific version with `git checkout vX.Y.Z`, or `npx skills add Enadabuzaid/orchestra-skills@vX.Y.Z`.
 
+## [0.3.0] - 2026-09-21
+
+### Added
+- **Check lanes**: a read-only lane named `<lane>-check` reviews that lane's work (a second tool's
+  opinion) before the `lane-runner` commits it. Findings go back to the implementer; the check is
+  advisory.
+- `examples/lanes-codex-frontend.json`: backend → Sonnet, ui → Codex, ui-check → Antigravity.
+- Guide §13: using other apps (Codex, Cursor) as the orchestrator. What's portable, and what isn't yet.
+
+### Changed
+- The `lane-runner`, the skill and the CLAUDE.md rules read the lane map from config instead of
+  assuming lane → tool, so user changes to the lanes take effect everywhere.
+
 ## [0.2.1] - 2026-09-21
 
 ### Added

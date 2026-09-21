@@ -3,8 +3,8 @@ name: orchestrate
 description: >-
   Build a multi-task feature with expensive models only for thinking and cheap models for the
   rest: plan with Fable/Opus, gate the plan through an Opus plan-reviewer until APPROVE, hand the
-  approved plan to a Sonnet lane-runner (it writes briefs, sends them to delegate-skills lanes:
-  complex/backend=codex, ui=agy, small/fallback=claude sonnet, reviews diffs, and commits), then loop an Opus
+  approved plan to a Sonnet lane-runner (it writes briefs, sends them to your delegate-skills lanes
+  (Codex, Antigravity, Claude Sonnet, … as configured), runs check lanes, reviews diffs, and commits), then loop an Opus
   completion-auditor (plan checklist + verify commands) until DONE. Use when the user says
   "orchestrate", "plan and delegate", "big model plans, cheap model builds", or wants to save tokens
   on a multi-task feature. DO NOT USE for a one-file change you can make inline faster than writing a brief.
@@ -12,7 +12,7 @@ license: MIT
 metadata:
   author: Enad Abuzaid
   homepage: https://github.com/Enadabuzaid/orchestra-skills
-  version: 0.2.1
+  version: 0.3.0
   requires: amElnagdy/delegate-skills (codex-delegate, agy-delegate, claude-delegate, copilot-delegate, delegate-setup)
 ---
 
@@ -93,14 +93,19 @@ Briefs are self-contained: paths and facts, never chat history. Keep each under 
 
 Load the matching delegate skill and run its relay with `--lane`:
 
-| Lane | Skill | Typical work |
-|---|---|---|
-| `complex` | `codex-delegate` (GPT-6 Astra, high) | large or tricky tasks: cross-cutting refactors, hard algorithms, concurrency |
-| `backend` | `codex-delegate` | server code, actions, migrations, jobs, tests |
-| `ui` | `agy-delegate` | React/TSX pages, components, styling |
-| `small` | `claude-delegate` (Sonnet) | small fixes, lint/static-analysis fixes, text |
-| `fallback` | `claude-delegate` (Sonnet, high) | when a lane fails twice or hits a quota limit |
-| `copilot-review` | `copilot-delegate` (read-only) | optional third opinion on a plan or diff (writes need `--allow-all-tools`, full access — ask the human first) |
+Lanes live in `~/.config/delegate-skills/config.json` and **the user can change them**, so always
+read the current map (`node ~/.claude/skills/delegate-setup/scripts/config.mjs load`) instead of
+assuming one. Default meaning of each lane name:
+
+| Lane | Typical work |
+|---|---|
+| `complex` | large or tricky tasks: cross-cutting refactors, hard algorithms, concurrency |
+| `backend` | server code, actions, migrations, jobs, tests |
+| `ui` | pages, components, styling |
+| `small` | small fixes, lint/static-analysis fixes, text |
+| `fallback` | when a lane fails twice or hits a quota limit |
+| `plan-check`, `copilot-review` | read-only second opinions |
+| **`<lane>-check`** | a read-only **check lane**: a second tool reviews `<lane>`'s work before it's committed (e.g. `ui-check`) |
 
 ```bash
 node "<delegate-skill-dir>/scripts/relay.mjs" --lane backend --brief brief.md --cd "$REPO"

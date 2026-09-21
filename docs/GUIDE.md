@@ -15,6 +15,7 @@ Read it top to bottom once; afterwards the [cheat sheet](#cheat-sheet) at the en
 - [10. Permissions and safety](#10-permissions-and-safety)
 - [11. Saving tokens: what actually saves them](#11-saving-tokens-what-actually-saves-them)
 - [12. Using it without orchestrate](#12-using-it-without-orchestrate)
+- [13. Using other apps as the orchestrator](#13-using-other-apps-as-the-orchestrator-codex-app-cursor-)
 - [Cheat sheet](#cheat-sheet)
 
 ---
@@ -277,6 +278,36 @@ Three ways, from easiest to most manual:
 
 To see which models each CLI has: `node ~/.claude/skills/delegate-setup/scripts/discover.mjs`.
 
+### Check lanes: a second tool reviews the first one's work
+
+Name a lane `<lane>-check` and make it read-only. The `lane-runner` then sends that tool every
+`<lane>` task's changes for a read-only review before it commits. Real problems go back to the
+implementer (max 2 rounds). The check is advisory: if the checking tool is out of quota, the task
+still continues, and the report says so.
+
+```json
+"ui":       { "implementer": "codex" },
+"ui-check": { "implementer": "agy", "model": "gemini-3.8-flash-high", "readOnly": true }
+```
+
+This works for any lane: `backend-check`, `complex-check`, …
+
+### Ready-made lane maps
+
+| File | Layout |
+|---|---|
+| `examples/lanes.json` | default: backend/complex → Codex, ui → Antigravity, small/fallback → Sonnet |
+| `examples/lanes-codex-frontend.json` | backend → **Sonnet**, ui → **Codex**, **ui-check → Antigravity** (read-only), small/fallback → Sonnet |
+
+Switch with one command (then run `scripts/smoke-test.sh` to confirm):
+
+```bash
+node ~/.claude/skills/delegate-setup/scripts/config.mjs write --scope global ~/orchestra-skills/examples/lanes-codex-frontend.json
+```
+
+**Trade-off to keep in mind:** every lane you move to `claude` uses your Claude plan; lanes on
+Codex/Antigravity use ChatGPT/Google. Put the biggest coding work on the quota you have most of.
+
 Per-project lanes: a repo can have `.delegate/config.json`, and each lane in it replaces the global
 lane with the same name. Claude asks you before trusting a project file.
 
@@ -359,3 +390,15 @@ You can also delegate a single task directly:
 | Let Antigravity write in a folder | `~/orchestra-skills/scripts/agy-allow.sh <folder>` |
 | Update orchestra-skills | `cd ~/orchestra-skills && git pull` |
 | Update delegate-skills | re-run the `npx skills add amElnagdy/delegate-skills …` line |
+
+## 13. Using other apps as the orchestrator (Codex app, Cursor, …)
+
+- **The coding lanes are portable.** delegate-skills relays are plain Node scripts. You can install
+  them for Codex (`npx skills add amElnagdy/delegate-skills --agent codex`), and Codex can send work
+  to Claude, Antigravity and the rest the same way.
+- **The orchestrate workflow is Claude Code-specific today.** Its approval and done checks are Claude
+  Code *subagents* (`~/.claude/agents/*.md`): `plan-reviewer`, `lane-runner` and
+  `completion-auditor`. Codex has skills but no subagents, so it can't run those checks as they are.
+- **So:** run orchestrate from **Claude Code**, and let Codex, Antigravity and Sonnet do the coding
+  from there. That's the tested setup. A "portable mode", where any app runs the Opus checks through
+  `claude-delegate --read-only --model opus`, is possible, but it isn't built or tested yet.

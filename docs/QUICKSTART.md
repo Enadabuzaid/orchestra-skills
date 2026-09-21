@@ -76,6 +76,18 @@ For a **small change** (one file, a typo, a quick fix), just ask normally withou
 Do the manual check it gives you (usually "open this page and click this"), look at
 `git log --oneline`, and push.
 
+## Change who does what
+
+Ask Claude: *"Use delegate-setup to move the ui lane to codex"*. Or switch to a ready-made map:
+
+```bash
+node ~/.claude/skills/delegate-setup/scripts/config.mjs write --scope global ~/orchestra-skills/examples/lanes-codex-frontend.json
+~/orchestra-skills/scripts/smoke-test.sh     # confirm
+```
+
+Add a `<lane>-check` lane (read-only) to have a second tool review that lane's work before commit.
+Details: [GUIDE §9](GUIDE.md#9-changing-lanes-and-models).
+
 ## Where did the tokens go?
 
 ```bash

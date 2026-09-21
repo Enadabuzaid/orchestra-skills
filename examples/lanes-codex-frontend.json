@@ -1,0 +1,13 @@
+{
+  "version": "delegate-fleet.v1",
+  "lanes": {
+    "plan-check":     { "implementer": "codex", "model": "gpt-6-astra", "effort": "high", "readOnly": true },
+    "complex":        { "implementer": "codex", "model": "gpt-6-astra", "effort": "high" },
+    "backend":        { "implementer": "claude", "model": "sonnet", "effort": "medium" },
+    "ui":             { "implementer": "codex", "effort": "medium" },
+    "ui-check":       { "implementer": "agy", "model": "gemini-3.8-flash-high", "readOnly": true },
+    "small":          { "implementer": "claude", "model": "sonnet", "effort": "medium" },
+    "fallback":       { "implementer": "claude", "model": "sonnet", "effort": "high" },
+    "copilot-review": { "implementer": "copilot", "readOnly": true }
+  }
+}

@@ -13,9 +13,11 @@ file; each lane's `result.json` is in `<work dir>/<lane>.run/`.
 | Any lane: *quota or rate limit reached* / HTTP 402 or 429 | That provider's monthly or hourly quota is used up | Wait for the reset, or send the task to `fallback`. The setup is fine |
 | `status: codex_unavailable` / `agy_unavailable` / … | CLI not installed or not on `PATH` | Install it, then run `doctor.sh` |
 | doctor shows *NOT logged in* | CLI not logged in | `codex login`, run `agy` once, `gh auth login` |
-| `plan-reviewer` / `diff-reviewer` not found | Claude Code started before the agents were installed | Restart Claude Code; check `ls ~/.claude/agents` |
+| `plan-reviewer` / `diff-reviewer` / `completion-auditor` not found | Claude Code started before the agents were installed | Restart Claude Code; check `ls ~/.claude/agents` |
 | `orchestrate` skill not offered | Link missing | Run `~/orchestra-skills/install.sh` again |
 | A lane uses the wrong model | The lane config differs from what you expect | `doctor.sh` prints the lanes; fix them with section 9 of the [guide](GUIDE.md#9-changing-lanes-and-models) |
+| `status: aborted` — *"the relay was killed by SIGTERM"* | Claude ended its turn while a run was still going. In headless mode (`claude -p`) that ends the process and kills the run | Fixed in the skill (v0.2.0): Claude now blocks until `result.json` exists. For your own scripts, keep the session alive until the relays finish |
+| *"claude.ai connectors are disabled because ANTHROPIC_API_KEY … is set"* | An API key in your environment takes precedence over your claude.ai login, so usage is billed to the API key | `unset ANTHROPIC_API_KEY` in the shell if you want your subscription to be used |
 | An implementer committed | Should never happen (relays don't commit and briefs forbid it) | `git reset --soft HEAD~1`, review the change, and report it upstream to delegate-skills |
 | `readOnlyViolation` in `result.json` | A read-only run changed files | Inspect with `git status`, discard with `git checkout -- <files>`, and report it upstream |
 

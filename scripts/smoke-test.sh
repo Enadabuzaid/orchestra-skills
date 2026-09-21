@@ -92,7 +92,7 @@ EOF
   commits="$(git rev-list --count HEAD)"
   changed="$(git status --porcelain | wc -l | tr -d ' ')"
 
-  if [ "$status" != "completed" ] && grep -qiE "quota|rate.?limit|402|429" "$WORK/$lane.run"/*.jsonl "$WORK/$lane.run"/stderr.txt "$out" 2>/dev/null; then
+  if [ "$status" != "completed" ] && grep -qiE "quota|rate.?limit|usage limit|402|429" "$WORK/$lane.run"/*.jsonl "$WORK/$lane.run"/stderr.txt "$out" 2>/dev/null; then
     reason="$impl quota or rate limit reached; the setup is fine, retry after it resets (see $out)"
   elif [ "$status" != "completed" ]; then reason="relay status: $status (see $out)"
   elif [ "$commits" != "1" ]; then reason="implementer committed (must not)"

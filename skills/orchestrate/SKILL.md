@@ -1,16 +1,18 @@
 ---
 name: orchestrate
 description: >-
-  Run a feature end-to-end with expensive models only for thinking and cheap implementers for
-  typing: plan with Fable/Opus, gate the plan through an Opus plan-reviewer until APPROVE, split it
-  into self-contained briefs, dispatch each brief to a delegate-skills lane (complex=codex astra,
-  backend=codex, ui=agy, small=claude sonnet, fallback=claude sonnet), review each diff with a
-  Sonnet diff-reviewer, land commits yourself, then loop an Opus completion-auditor (runs plan checklist + verify commands) until DONE. Use when the user says "orchestrate",
-  "plan and delegate", "big model plans, cheap model builds", or wants to save tokens on a
-  multi-task feature. DO NOT USE for a one-file change you can make inline faster than writing a brief.
+  Build a multi-task feature with expensive models only for thinking and cheap models for the
+  rest: plan with Fable/Opus, gate the plan through an Opus plan-reviewer until APPROVE, hand the
+  approved plan to a Sonnet lane-runner (it writes briefs, sends them to delegate-skills lanes:
+  complex/backend=codex, ui=agy, small/fallback=claude sonnet, reviews diffs, and commits), then loop an Opus
+  completion-auditor (plan checklist + verify commands) until DONE. Use when the user says
+  "orchestrate", "plan and delegate", "big model plans, cheap model builds", or wants to save tokens
+  on a multi-task feature. DO NOT USE for a one-file change you can make inline faster than writing a brief.
 license: MIT
 metadata:
-  version: 0.1.0
+  author: Enad Abuzaid
+  homepage: https://github.com/Enadabuzaid/orchestra-skills
+  version: 0.2.0
   requires: amElnagdy/delegate-skills (codex-delegate, agy-delegate, claude-delegate, copilot-delegate, delegate-setup)
 ---
 
@@ -29,7 +31,7 @@ plan gate, optional second opinion, final audit). Everything line-by-line runs o
 | Second opinion (optional) | GPT-6 Astra | `plan-check` lane, read-only |
 | Large / complicated tasks | GPT-6 Astra | `complex` lane |
 | Normal tasks | Codex default, Gemini Flash, Sonnet | `backend`, `ui`, `small` lanes |
-| Diff review | Sonnet 5 | `diff-reviewer` subagent |
+| Stages 3–6: briefs, dispatch, diff review, commits | Sonnet 5 | `lane-runner` subagent |
 | Completion check (loops until DONE) | Opus 5 | `completion-auditor` subagent |
 
 ## Stage 1 — Plan (big model)
@@ -64,6 +66,24 @@ the plan and send it back through `plan-reviewer`.
 
 Never dispatch implementation before `APPROVE`.
 
+## Stages 3–6 — Hand the plan to the `lane-runner` (Sonnet)
+
+Coordination (writing briefs, running relays, waiting, reviewing diffs, committing) is routine,
+and it is where most orchestrator tokens go. **Don't do it on Opus.** Once the plan is approved:
+
+1. Commit the approved plan.
+2. Dispatch the `lane-runner` subagent (Sonnet) with the plan path, the repo path, and the task IDs
+   to run (all of them, in plan order). Wait for its `RUN REPORT`. Don't end your turn before
+   it arrives.
+3. Read only the report. Check it with cheap commands: `git log --oneline <base>..HEAD`,
+   `git status`, and the full test command. Don't re-read the diffs; the completion auditor does
+   that next.
+4. Tasks reported as "not done" → decide: fix the plan (and send it back through `plan-reviewer` if
+   the design changes), re-run the `lane-runner` for those tasks, or escalate to the user.
+
+The sections below describe what the `lane-runner` does. Follow them yourself only if you're
+running without it (for example, the user asked you to drive the lanes directly).
+
 ## Stage 3 — Briefs
 
 One brief per task, written with [references/brief-template.md](references/brief-template.md).
@@ -86,14 +106,21 @@ Load the matching delegate skill and run its relay with `--lane`:
 node "<delegate-skill-dir>/scripts/relay.mjs" --lane backend --brief brief.md --cd "$REPO"
 ```
 
-- Run it with `run_in_background: true`; you are notified when `result.json` is written.
+- Always pass `--out-dir "${TMPDIR:-/tmp}/orchestrate/<repo-name>/<task-id>"` so you know where
+  `result.json` will land. Keep it **outside the repo**, so run logs never end up in the working tree.
+- Start the run with `run_in_background: true`, then **never end your turn while a run is in
+  flight.** If you have nothing else to do, block on it in the foreground:
+  `until [ -f <dir>/result.json ]; do sleep 10; done` (Bash timeout 600000), repeated until it exists.
+  In a headless session (`claude -p`, CI, scripts), ending your reply ends the process and kills
+  every running implementer (the relay reports `aborted … SIGTERM`).
 - Independent tasks touching **disjoint files** may run in parallel. Tasks touching the same files
   run sequentially.
 - Follow-ups go to the same session with a delta brief (`--session <id>` from `result.json`).
 
 ## Stage 5 — Review each diff (cheap first)
 
-Dispatch the `diff-reviewer` subagent (Sonnet) with: the brief path, the task's touched files, and the
+The `lane-runner` reviews each diff itself. When you drive the lanes yourself, dispatch the
+`diff-reviewer` subagent (Sonnet) with: the brief path, the task's touched files, and the
 repo's gate commands. It returns `PASS` or `FAIL` with findings.
 
 - `FAIL` → delta brief to the same implementer session. After two failed rounds, reroute to `fallback`
@@ -118,8 +145,8 @@ command, checks that tasks from different implementers fit together, and looks f
 
 - `DONE` → go to Stage 8.
 - `GAPS` → each gap becomes a new task. Add it to the plan's task table as `G1`, `G2`, … (`todo`),
-  write a brief, send it to the lane the auditor suggested, then `diff-reviewer`, then land it as
-  in Stages 4–6. Then run `completion-auditor` again.
+  with the lane the auditor suggested, commit the plan, and dispatch the `lane-runner` with just
+  those IDs. Then run `completion-auditor` again.
 - Maximum 3 rounds. If there are still gaps after round 3, stop and show the user the remaining gaps
   with the auditor's evidence. Never report the feature as finished while the auditor says `GAPS`.
 

@@ -39,9 +39,9 @@ orchestra-skills splits the work that way:
              │                       │                       │
              └──────── diffs ────────┴───────────┬───────────┘
                                                  ▼
-                                 Sonnet diff-reviewer: PASS / FAIL
+                          Sonnet lane-runner reviews each diff: PASS / FAIL
                                                  ▼
-                           Claude re-runs tests and commits (only Claude commits)
+                        lane-runner re-runs the tests and commits (implementers never commit)
                                                  ▼
                      Opus completion-auditor: every plan item + verify commands
                          DONE ──▶ report to you      GAPS ──▶ fix tasks ──▶ lanes ──▶ audit again
@@ -66,10 +66,11 @@ Files installed on your machine:
 
 | Path | What it is |
 |---|---|
-| `~/.claude/skills/orchestrate/` | The 8-stage workflow (symlink to this repo) |
+| `~/.claude/skills/orchestrate/` | The workflow skill (symlink to this repo) |
 | `~/.claude/agents/plan-reviewer.md` | Opus subagent that approves or rejects plans |
 | `~/.claude/agents/diff-reviewer.md` | Sonnet subagent that reviews each task's diff |
 | `~/.claude/agents/completion-auditor.md` | Opus subagent that decides when the feature is really finished |
+| `~/.claude/agents/lane-runner.md` | Sonnet subagent that runs the approved plan: briefs, lanes, reviews, commits |
 | `~/.claude/CLAUDE.md` | A short block of rules between `orchestra-skills` markers |
 | `~/.claude/skills/*-delegate/` | The implementer skills from delegate-skills |
 | `~/.config/delegate-skills/config.json` | Your lanes: which CLI and model does which job |
@@ -88,7 +89,7 @@ Because the skill and agents are **symlinks**, `git pull` in this repo updates t
 | UI work | **Gemini 3.8 Flash** via Antigravity (`ui` lane) | Fast, large context, generous quota |
 | Small fixes, docs, lint | **Claude Sonnet 5** (`small` lane) | Cheap and precise |
 | When a lane fails or hits its quota | **Claude Sonnet 5, high effort** (`fallback` lane) | Reliable backup |
-| Review each diff | **Claude Sonnet 5** (`diff-reviewer`) | Reads line by line so Opus doesn't have to |
+| Run the approved plan: briefs, lanes, diff review, commits | **Claude Sonnet 5** (`lane-runner`) | Coordination is routine; on Opus it was the biggest cost (see section 11) |
 | Decide when it's finished (loops until DONE) | **Claude Opus 5** (`completion-auditor`) | Checks every plan item and runs the verify commands |
 | Extra opinion (optional) | **Copilot** (`copilot-review` lane, read-only) | When you have Copilot quota to spare |
 
@@ -122,7 +123,7 @@ git clone https://github.com/Enadabuzaid/orchestra-skills ~/orchestra-skills
 ~/orchestra-skills/install.sh
 ```
 
-`install.sh` links the skill and the three agents into `~/.claude`, adds the rules block to
+`install.sh` links the skill and the four agents into `~/.claude`, adds the rules block to
 `~/.claude/CLAUDE.md`, and writes the default lanes if you don't have any yet. It is safe to run again.
 
 **Step 4. Let Antigravity write in your project folders** (only if you use the `ui` lane).
@@ -187,16 +188,18 @@ end-to-end test and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if a lane fails.
 5. **Optional second opinion.** For big or risky features, say *"also get Astra's opinion"* and
    the plan goes to GPT-6 Astra (read-only) too.
 
-6. **Implementation runs in the background.** Claude writes one brief per task and sends each to
-   its lane. Tasks that touch different files run at the same time. You'll see lines such as
+6. **Opus hands the approved plan to the `lane-runner` (Sonnet).** From here until the
+   completion check, the work runs on Sonnet. The runner writes one brief per task and sends each
+   to its lane. Tasks that touch different files run at the same time. You'll see lines such as
    `relay: completed · codex` as they finish.
 
-7. **Each result is reviewed.** `diff-reviewer` (Sonnet) runs the tests and reads the diff, then
-   returns `PASS` or `FAIL`. On `FAIL`, the same implementer gets a short follow-up brief. After two
+7. **Each result is reviewed.** The runner (Sonnet) runs the task's tests and reads the diff. On `FAIL`, the same implementer gets a short follow-up brief. After two
    failures, the task moves to the `fallback` lane.
 
-8. **Claude commits.** Claude runs the tests once more and commits each task with a clear message.
-   Implementers never commit, and nothing is pushed.
+8. **Commits.** The runner runs the full test suite and commits each task with a clear message,
+   then sends Opus a short run report. Implementers never commit, and nothing is pushed. If a lane
+   fails (quota, a permission it doesn't have), the runner moves the task to `fallback`. It never
+   widens permissions on its own.
 
 9. **Completion loop (Opus decides when it's finished).** The `completion-auditor` (Opus) goes
    through every task and every **Definition of Done** item in the plan and checks each one against
@@ -224,10 +227,10 @@ end-to-end test and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if a lane fails.
 | 1 Plan | Fable/Opus (your session) | your request + code | `docs/plans/…md` | yes, once |
 | 2 Plan gate | Opus `plan-reviewer` | plan path | `APPROVE` / fixes | yes, short |
 | 2b Second opinion | GPT-6 Astra (`plan-check`) | plan | `APPROVE` / fixes | on ChatGPT quota |
-| 3 Briefs | orchestrator | the plan | one ~1-page brief per task | small |
+| 3 Briefs | Sonnet `lane-runner` | the plan | one ~1-page brief per task | Sonnet only |
 | 4 Implement | lanes | brief only | code changes + `result.json` | **none** (other quotas) |
-| 5 Review | Sonnet `diff-reviewer` | brief + diff | `PASS`/`FAIL` + findings | Sonnet, not Opus |
-| 6 Land | orchestrator | reviewer summary | tests re-run + commit | small |
+| 5 Review | Sonnet `lane-runner` | brief + diff | pass, or a delta brief / fallback | Sonnet only |
+| 6 Land | Sonnet `lane-runner` | its own review | full tests + one commit per task → run report to Opus | Sonnet only |
 | 7 Completion loop | Opus `completion-auditor` | plan + diff from the base commit + verify commands | `DONE` / `GAPS` → fix tasks | yes, 1–3 short runs |
 | 8 Report | orchestrator | auditor output | summary to you | small |
 

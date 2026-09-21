@@ -45,7 +45,7 @@ In a normal session the most expensive model reads every file and writes every l
 | UI tasks | Gemini 3.8 Flash (Antigravity) | `ui` lane |
 | Small fixes and docs | Claude Sonnet 5 | `small` lane |
 | When a lane fails or hits quota | Claude Sonnet 5 (high) | `fallback` lane |
-| Review each diff | Claude Sonnet 5 | `diff-reviewer` agent |
+| Run the approved plan: briefs, lanes, reviews, commits | Claude Sonnet 5 | `lane-runner` agent |
 | Decide when it's finished (loops until DONE) | Claude Opus 5 | `completion-auditor` agent |
 
 ## Install (5 minutes)
@@ -94,7 +94,7 @@ built and how it was verified. You review `git log` and push.
 
 - **[docs/GUIDE.md](docs/GUIDE.md)**: the complete guide, from install and first feature to lanes,
   models, permissions and token savings
-- [docs/TESTING.md](docs/TESTING.md): doctor, lane smoke test and end-to-end test
+- [docs/TESTING.md](docs/TESTING.md): **test it yourself, step by step** (doctor → lane smoke test → automated end-to-end → watch it live → token check), with recorded results
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): common failures and fixes
 
 ## What's in the repo
@@ -105,6 +105,7 @@ built and how it was verified. You review `git log` and push.
 | `agents/plan-reviewer.md` | Opus plan gate: `APPROVE` or numbered fixes |
 | `agents/diff-reviewer.md` | Sonnet per-task reviewer: `PASS` / `FAIL` |
 | `agents/completion-auditor.md` | Opus completion gate: `DONE` / `GAPS` |
+| `agents/lane-runner.md` | Sonnet runner for the approved plan (briefs → lanes → review → commit) |
 | `CLAUDE.snippet.md` | Rules added to `~/.claude/CLAUDE.md` |
 | `examples/lanes.json` | The default lane map |
 | `examples/demo-app/` | A tiny app for the end-to-end test |
@@ -113,9 +114,19 @@ built and how it was verified. You review `git log` and push.
 | `scripts/smoke-test.sh` | Real test of every lane |
 | `scripts/agy-allow.sh` | Scoped Antigravity write permission for a folder |
 | `scripts/token-report.sh` | Tokens per delegated run, and which quota paid |
+| `scripts/e2e-test.sh` | Unattended full-workflow test on the demo app, checked by the script |
+
+## Author
+
+**Enad Abuzaid** · [@Enadabuzaid](https://github.com/Enadabuzaid)
+
+Issues and pull requests are welcome. See [CHANGELOG.md](CHANGELOG.md) for versions.
 
 ## Credits
 
-Implementer relays: [amElnagdy/delegate-skills](https://github.com/amElnagdy/delegate-skills) (MIT).
+The implementer relays come from [amElnagdy/delegate-skills](https://github.com/amElnagdy/delegate-skills)
+(MIT). orchestra-skills builds on them and doesn't fork them.
 
-MIT licensed.
+## License
+
+[MIT](LICENSE) © 2026 Enad Abuzaid
